@@ -280,24 +280,25 @@ void scanning(const char *file_contents){
                     }
                     now++;
                     i++;
-                    end = i;
                 }
                 if (has_error) continue;
                 now++;
                 i++;
+
                 end = i;
                 char lexeme[MAX_TOKEN_SIZE];
                 int lexeme_length = end - start + 1;
                 strncpy(lexeme, file_contents + start, lexeme_length);
                 lexeme[lexeme_length] = '\0';
-                token.type=STRING;
-                token.lexeme = strdup(lexeme);
 
                 char literal[MAX_TOKEN_SIZE];
                 int literal_length = end - start - 1;
                 strncpy(literal, file_contents + start + 1, literal_length);
                 literal[literal_length] = '\0';
-                token.literal = literal;
+
+                token.type=STRING;
+                token.lexeme = strdup(lexeme);
+                token.literal = strdup(literal);
                 token.line = line;
                 break;
             default:
