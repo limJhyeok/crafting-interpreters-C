@@ -10,7 +10,15 @@ typedef enum TokenType {
     RIGHT_PAREN,
     LEFT_BRACE,
     RIGHT_BRACE,
-    END_OF_FILE
+
+    STAR,
+    DOT,
+    COMMA,
+    PLUS,
+    MINUS,
+    SEMICOLON,
+
+    END_OF_FILE,
 } TokenType;
 
 typedef struct Token {
@@ -117,6 +125,36 @@ void scanning(const char *file_contents){
                 token.lexeme = strdup("}");
                 token.literal = NULL;
                 break;
+            case '*':
+                token.type = STAR;
+                token.lexeme = strdup("*");
+                token.literal = NULL;
+                break;
+            case '.':
+                token.type = DOT;
+                token.lexeme = strdup(".");
+                token.literal = NULL;
+                break;
+            case ',':
+                token.type = COMMA;
+                token.lexeme = strdup(",");
+                token.literal = NULL;
+                break;
+            case '+':
+                token.type = PLUS;
+                token.lexeme = strdup("+");
+                token.literal = NULL;
+                break;
+            case '-':
+                token.type = MINUS;
+                token.lexeme = strdup("-");
+                token.literal = NULL;
+                break;
+            case ';':
+                token.type = SEMICOLON;
+                token.lexeme = strdup(";");
+                token.literal = NULL;
+                break;
             default:
                 printf("Unsupported token type.\n");
                 continue;
@@ -138,6 +176,13 @@ void scanning(const char *file_contents){
             case RIGHT_PAREN: type_str = "RIGHT_PAREN"; break;
             case LEFT_BRACE: type_str = "LEFT_BRACE"; break;
             case RIGHT_BRACE: type_str = "RIGHT_BRACE"; break;
+
+            case STAR: type_str = "STAR"; break;
+            case DOT: type_str = "DOT"; break;
+            case COMMA: type_str = "COMMA"; break;
+            case PLUS: type_str = "PLUS"; break;
+            case MINUS: type_str = "MINUS"; break;
+            case SEMICOLON: type_str = "SEMICOLON"; break;
 
             case END_OF_FILE: type_str = "EOF"; break;
             default: type_str = "UNKNOWN"; break;
