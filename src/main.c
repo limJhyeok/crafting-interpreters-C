@@ -208,7 +208,6 @@ void scanning(const char *file_contents){
     }
     printf("EOF  null\n");
 
-
     // 할당된 메모리 해제
     for (int i = 0; i < token_index; i++) {
         free(tokens[i].lexeme);
