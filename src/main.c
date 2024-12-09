@@ -241,6 +241,8 @@ void scanning(const char *file_contents){
                         now++;
                         i++;
                     }
+                    if (*(now) == '\n') line++;
+                    now++;
                     continue;
                 } else{
                     token.type = SLASH;
