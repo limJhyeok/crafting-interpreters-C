@@ -249,6 +249,12 @@ void scanning(const char *file_contents){
                     token.line = line;
                     break; 
                 }
+            case '\t':
+                now++;
+                continue;
+            case ' ':
+                now++;
+                continue;
             case ';':
                 token.type = SEMICOLON;
                 token.lexeme = strdup(";");
