@@ -18,6 +18,9 @@ typedef enum TokenType {
     MINUS,
     SEMICOLON,
 
+    EQUAL,
+    EQUAL_EQUAL,
+
     END_OF_FILE,
 } TokenType;
 
@@ -56,9 +59,8 @@ int main(int argc, char *argv[]) {
             // exit(1);
         }
         if (strlen(file_contents) == 0){
-            printf("EOF  null\n"); // Placeholder, remove this line when implementing the scanner
+            printf("EOF  null\n");
         } 
-        // printf("EOF  null\n"); // Placeholder, remove this line when implementing the scanner
         
         free(file_contents);
     } else {
@@ -165,6 +167,21 @@ void scanning(const char *file_contents){
                 token.literal = NULL;
                 token.line = line;
                 break;
+            case '=':
+                if (*(now + 1) == '='){
+                    token.type = EQUAL_EQUAL;
+                    token.lexeme = strdup("==");
+                    token.literal = NULL;
+                    token.line = line;
+                    now++;
+                    i++;
+                } else{
+                    token.type = EQUAL;
+                    token.lexeme = strdup("=");
+                    token.literal = NULL;
+                    token.line = line;                    
+                }
+                break;
             case ';':
                 token.type = SEMICOLON;
                 token.lexeme = strdup(";");
@@ -200,6 +217,9 @@ void scanning(const char *file_contents){
             case PLUS: type_str = "PLUS"; break;
             case MINUS: type_str = "MINUS"; break;
             case SEMICOLON: type_str = "SEMICOLON"; break;
+
+            case EQUAL: type_str = "EQUAL"; break;
+            case EQUAL_EQUAL: type_str = "EQUAL_EQUAL"; break;
 
             case END_OF_FILE: type_str = "EOF"; break;
             default: type_str = "UNKNOWN"; break;
