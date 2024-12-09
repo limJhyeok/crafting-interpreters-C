@@ -25,6 +25,7 @@ typedef struct Token {
     TokenType type;
     char *lexeme;
     char *literal;
+    int line;
 } Token;
 
 char *read_file_contents(const char *filename);
@@ -102,6 +103,8 @@ void scanning(const char *file_contents){
     size_t file_size = strlen(file_contents);
     Token tokens[MAX_TOKEN_SIZE];
     int token_index = 0;
+    int line = 1;
+    int has_error = 0;
     for (int i = 0; i < file_size; i++){
         Token token;
         switch (*now) {
@@ -109,64 +112,75 @@ void scanning(const char *file_contents){
                 token.type = LEFT_PAREN;
                 token.lexeme = strdup("(");  // 문자열 복사
                 token.literal = NULL;
+                token.line = line;
                 break;
             case ')':
                 token.type = RIGHT_PAREN;
                 token.lexeme = strdup(")");  // 문자열 복사
                 token.literal = NULL;
+                token.line = line;
                 break;
             case '{':
                 token.type = LEFT_BRACE;
                 token.lexeme = strdup("{");
                 token.literal = NULL;
+                token.line = line;
                 break;
             case '}':
                 token.type = RIGHT_BRACE;
                 token.lexeme = strdup("}");
                 token.literal = NULL;
+                token.line = line;
                 break;
             case '*':
                 token.type = STAR;
                 token.lexeme = strdup("*");
                 token.literal = NULL;
+                token.line = line;
                 break;
             case '.':
                 token.type = DOT;
                 token.lexeme = strdup(".");
                 token.literal = NULL;
+                token.line = line;
                 break;
             case ',':
                 token.type = COMMA;
                 token.lexeme = strdup(",");
                 token.literal = NULL;
+                token.line = line;
                 break;
             case '+':
                 token.type = PLUS;
                 token.lexeme = strdup("+");
                 token.literal = NULL;
+                token.line = line;
                 break;
             case '-':
                 token.type = MINUS;
                 token.lexeme = strdup("-");
                 token.literal = NULL;
+                token.line = line;
                 break;
             case ';':
                 token.type = SEMICOLON;
                 token.lexeme = strdup(";");
                 token.literal = NULL;
+                token.line = line;
+                break;
+            case '\n':
+                line++;
+                now++;
                 break;
             default:
-                printf("Unsupported token type.\n");
-                continue;
+                fprintf(stderr, "[line %d] Error: Unexpected character: %c\n", line, *now);
+                now++;
+                has_error = 1;
+                continue; 
         }
         tokens[token_index++] = token; 
         now++;
     }
-    // Token token;
-    // token.type = END_OF_FILE;
-    // token.lexeme = strdup("");
-    // token.literal = NULL;
-    // tokens[token_index++] = token; 
 
 
     for (int i = 0; i < token_index; i++) {
@@ -196,5 +210,11 @@ void scanning(const char *file_contents){
     // 할당된 메모리 해제
     for (int i = 0; i < token_index; i++) {
         free(tokens[i].lexeme);
+    }
+
+    if (has_error){
+        exit(65);
+    } else{
+        exit(0);
     }
 }
