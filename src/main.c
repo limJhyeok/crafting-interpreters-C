@@ -27,6 +27,8 @@ typedef enum TokenType {
     GREATER,
     GREATER_EQUAL,
 
+    STRING,
+
     SLASH,
 
     END_OF_FILE,
@@ -267,6 +269,37 @@ void scanning(const char *file_contents){
                 line++;
                 now++;
                 continue;
+            case '"':
+                int start = i;
+                int end = -1;
+                while ((*(now+1) != '"')){
+                    if (i >= file_size){
+                        has_error = 1;
+                        fprintf(stderr, "[line %d] Error: Unterminated string.\n", line);
+                        break;
+                    }
+                    now++;
+                    i++;
+                    end = i;
+                }
+                if (has_error) continue;
+                now++;
+                i++;
+                end = i;
+                char lexeme[MAX_TOKEN_SIZE];
+                int lexeme_length = end - start + 1;
+                strncpy(lexeme, file_contents + start, lexeme_length);
+                lexeme[lexeme_length] = '\0';
+                token.type=STRING;
+                token.lexeme = strdup(lexeme);
+
+                char literal[MAX_TOKEN_SIZE];
+                int literal_length = end - start - 1;
+                strncpy(literal, file_contents + start + 1, literal_length);
+                literal[literal_length] = '\0';
+                token.literal = literal;
+                token.line = line;
+                break;
             default:
                 fprintf(stderr, "[line %d] Error: Unexpected character: %c\n", line, *now);
                 now++;
@@ -302,6 +335,8 @@ void scanning(const char *file_contents){
             case GREATER: type_str = "GREATER"; break;
             case GREATER_EQUAL: type_str = "GREATER_EQUAL"; break;
 
+            case STRING: type_str = "STRING"; break;
+
             case SLASH: type_str = "SLASH"; break;
 
             case END_OF_FILE: type_str = "EOF"; break;
@@ -325,3 +360,5 @@ void scanning(const char *file_contents){
         exit(0);
     }
 }
+
+
