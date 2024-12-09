@@ -8,6 +8,8 @@
 typedef enum TokenType {
     LEFT_PAREN,
     RIGHT_PAREN,
+    LEFT_BRACE,
+    RIGHT_BRACE,
     END_OF_FILE
 } TokenType;
 
@@ -105,6 +107,16 @@ void scanning(const char *file_contents){
                 token.lexeme = strdup(")");  // 문자열 복사
                 token.literal = NULL;
                 break;
+            case '{':
+                token.type = LEFT_BRACE;
+                token.lexeme = strdup("{");
+                token.literal = NULL;
+                break;
+            case '}':
+                token.type = RIGHT_BRACE;
+                token.lexeme = strdup("}");
+                token.literal = NULL;
+                break;
             default:
                 printf("Unsupported token type.\n");
                 continue;
@@ -124,6 +136,9 @@ void scanning(const char *file_contents){
         switch (tokens[i].type) {
             case LEFT_PAREN: type_str = "LEFT_PAREN"; break;
             case RIGHT_PAREN: type_str = "RIGHT_PAREN"; break;
+            case LEFT_BRACE: type_str = "LEFT_BRACE"; break;
+            case RIGHT_BRACE: type_str = "RIGHT_BRACE"; break;
+
             case END_OF_FILE: type_str = "EOF"; break;
             default: type_str = "UNKNOWN"; break;
         }
