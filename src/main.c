@@ -168,10 +168,10 @@ void scanning(const char *file_contents){
                 token.literal = NULL;
                 token.line = line;
                 break;
-            case '\n':
-                line++;
-                now++;
-                break;
+            // case '\n':
+            //     line++;
+            //     now++;
+            //     break;
             default:
                 fprintf(stderr, "[line %d] Error: Unexpected character: %c\n", line, *now);
                 now++;
