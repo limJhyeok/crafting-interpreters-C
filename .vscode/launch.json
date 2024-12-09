@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Debug with your_program.sh",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/build/interpreter",
+        "args": ["tokenize", "test.lox"],
+        "stopAtEntry": false,
+        "cwd": "${workspaceFolder}",
+        "environment": [
+          {
+            "name": "VCPKG_ROOT",
+            "value": "/your/path/to/vcpkg_root"
+          }
+        ],
+        "externalConsole": false,
+        "MIMode": "gdb",
+        "setupCommands": [
+          {
+            "description": "Enable pretty-printing for gdb",
+            "text": "-enable-pretty-printing",
+            "ignoreFailures": true
+          }
+        ],
+        "preLaunchTask": "Build with your_program.sh"
+      }
+    ]
+  }
+  
