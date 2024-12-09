@@ -20,6 +20,8 @@ typedef enum TokenType {
 
     EQUAL,
     EQUAL_EQUAL,
+    BANG,
+    BANG_EQUAL,
 
     END_OF_FILE,
 } TokenType;
@@ -182,6 +184,21 @@ void scanning(const char *file_contents){
                     token.line = line;                    
                 }
                 break;
+            case '!':
+                if (*(now + 1) == '='){
+                        token.type = BANG_EQUAL;
+                        token.lexeme = strdup("!=");
+                        token.literal = NULL;
+                        token.line = line;
+                        now++;
+                        i++;
+                } else{
+                    token.type = BANG;
+                    token.lexeme = strdup("!");
+                    token.literal = NULL;
+                    token.line = line;                    
+                }
+                break;            
             case ';':
                 token.type = SEMICOLON;
                 token.lexeme = strdup(";");
@@ -220,6 +237,8 @@ void scanning(const char *file_contents){
 
             case EQUAL: type_str = "EQUAL"; break;
             case EQUAL_EQUAL: type_str = "EQUAL_EQUAL"; break;
+            case BANG: type_str = "BANG"; break;
+            case BANG_EQUAL: type_str = "BANG_EQUAL"; break;
 
             case END_OF_FILE: type_str = "EOF"; break;
             default: type_str = "UNKNOWN"; break;
