@@ -435,6 +435,7 @@ void trimTrailingZeros(char *str){
         trim_index = i;
     }
     if (trim_index == decimal_index + 1){
+        str[trim_index + 1] = '\0';
         return;
     }
     str[trim_index] = '\0';
