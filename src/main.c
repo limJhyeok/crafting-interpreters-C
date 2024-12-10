@@ -30,6 +30,7 @@ typedef enum TokenType {
     STRING,
     NUMBER,
 
+    IDENTIFIER,
     SLASH,
 
     END_OF_FILE,
@@ -47,6 +48,8 @@ char *read_file_contents(const char *filename);
 void scanning(const char *file_contents);
 
 int isDigit(const char c);
+int isAlpha(const char c);
+int isAlphaNumeric(const char c);
 
 int isIn(const char *str, const char c);
 
@@ -340,6 +343,24 @@ void scanning(const char *file_contents){
                     }
                     token.line = line;
                     break;
+                } else if (isAlpha(*now)){
+                    int start = i;
+                    int end = -1;
+                    while (isAlphaNumeric(*(now + 1))){
+                        now++;
+                        i++;
+                    }
+                    end = i;
+                    char lexeme[MAX_TOKEN_SIZE];
+                    int lexeme_length = end - start + 1;
+                    strncpy(lexeme, file_contents + start, lexeme_length);
+                    lexeme[lexeme_length] = '\0';
+                    
+                    token.type = IDENTIFIER;
+                    token.lexeme = strdup(lexeme);
+                    token.literal = NULL;
+                    token.line = line;
+                    break;
                 }
                 fprintf(stderr, "[line %d] Error: Unexpected character: %c\n", line, *now);
                 now++;
@@ -377,8 +398,11 @@ void scanning(const char *file_contents){
 
             case STRING: type_str = "STRING"; break;
             case NUMBER: type_str = "NUMBER"; break;
+            case IDENTIFIER: type_str = "IDENTIFIER"; break;
 
             case SLASH: type_str = "SLASH"; break;
+
+
 
             case END_OF_FILE: type_str = "EOF"; break;
             default: type_str = "UNKNOWN"; break;
@@ -405,6 +429,16 @@ void scanning(const char *file_contents){
 int isDigit(const char c){
     if (c >= '0' && c <='9') return 1;
     return 0;
+}
+
+int isAlpha(const char c){
+    if (c >= 'a' && c <='z') return 1;
+    if (c >= 'A' && c <= 'Z') return 1;
+    if (c == '_') return 1;
+    return 0;
+}
+int isAlphaNumeric(const char c){
+    return isAlpha(c) || isDigit(c);
 }
 
 
