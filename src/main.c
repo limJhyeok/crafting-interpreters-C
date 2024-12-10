@@ -28,6 +28,7 @@ typedef enum TokenType {
     GREATER_EQUAL,
 
     STRING,
+    NUMBER,
 
     SLASH,
 
@@ -44,6 +45,10 @@ typedef struct Token {
 char *read_file_contents(const char *filename);
 
 void scanning(const char *file_contents);
+
+int isDigit(const char c);
+
+int isIn(const char *str, const char c);
 
 int main(int argc, char *argv[]) {
     // Disable output buffering
@@ -302,6 +307,36 @@ void scanning(const char *file_contents){
                 token.line = line;
                 break;
             default:
+                if (isDigit(*now)){
+                    int start = i;
+                    int end = -1;
+                    while ((isDigit(*(now+1)) || *(now+1) == '.')){
+                        now++;
+                        i++;
+                    }                    
+                    end = i;
+
+                    char lexeme[MAX_TOKEN_SIZE];
+                    int lexeme_length = end - start + 1;
+                    strncpy(lexeme, file_contents + start, lexeme_length);
+                    lexeme[lexeme_length] = '\0';
+
+                    token.type = NUMBER;
+                    token.lexeme = strdup(lexeme);
+                    if (isIn(lexeme, '.')){
+                        token.literal = strdup(lexeme);
+                    } else {
+                        char literal[MAX_TOKEN_SIZE];
+                        int literal_length = end - start + 1 + 2;
+                        strncpy(literal, file_contents + start, literal_length);
+                        literal[literal_length-2] = '.';
+                        literal[literal_length-1] = '0';
+                        literal[literal_length] = '\0';
+                        token.literal = strdup(literal);
+                    }
+                    token.line = line;
+                    break;
+                }
                 fprintf(stderr, "[line %d] Error: Unexpected character: %c\n", line, *now);
                 now++;
                 has_error = 1;
@@ -337,6 +372,7 @@ void scanning(const char *file_contents){
             case GREATER_EQUAL: type_str = "GREATER_EQUAL"; break;
 
             case STRING: type_str = "STRING"; break;
+            case NUMBER: type_str = "NUMBER"; break;
 
             case SLASH: type_str = "SLASH"; break;
 
@@ -362,4 +398,16 @@ void scanning(const char *file_contents){
     }
 }
 
+int isDigit(const char c){
+    if (c >= '0' && c <='9') return 1;
+    return 0;
+}
 
+
+int isIn(const char *str, const char c){
+    while (*str){
+        if (*str == c) return 1;
+        str++;
+    }
+    return 0;
+}
