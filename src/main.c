@@ -3,6 +3,8 @@
 #include <string.h>
 #include <malloc.h>
 
+#define N_RESERVED_WORD 16
+#define MAX_LEN_RESERVED_WORD 10
 #define MAX_TOKEN_SIZE 100
 
 typedef enum TokenType {
@@ -33,7 +35,26 @@ typedef enum TokenType {
     IDENTIFIER,
     SLASH,
 
+    AND,
+    CLASS,
+    ELSE,
+    FALSE,
+    FOR,
+    FUN,
+    IF,
+    NIL,
+    OR,
+    PRINT,
+    RETURN,
+    SUPER,
+    THIS,
+    TRUE,
+    VAR,
+    WHILE,
+    
     END_OF_FILE,
+    
+    INVALID_TOKEN
 } TokenType;
 
 typedef struct Token {
@@ -55,6 +76,7 @@ int isIn(const char *str, const char c);
 
 void trimTrailingZeros(char *str);
 
+TokenType getReservedToken(const char *c);
 
 int main(int argc, char *argv[]) {
     // Disable output buffering
@@ -356,7 +378,18 @@ void scanning(const char *file_contents){
                     strncpy(lexeme, file_contents + start, lexeme_length);
                     lexeme[lexeme_length] = '\0';
                     
-                    token.type = IDENTIFIER;
+                    if (getReservedToken(lexeme) != INVALID_TOKEN){
+                        // char lexeme_upper_case[strlen(lexeme)+1];
+                        // for (int i = 0; i < strlen(lexeme); i++){
+                        //     lexeme_upper_case[i] = toupper(lexeme[i]);
+                        // }
+                        token.type = getReservedToken(lexeme); 
+                        // token.lexeme = strdup(lexeme);
+                        // token.literal = NULL;
+                        // token.line = line;
+                    } else {
+                        token.type = IDENTIFIER;
+                    }
                     token.lexeme = strdup(lexeme);
                     token.literal = NULL;
                     token.line = line;
@@ -399,6 +432,23 @@ void scanning(const char *file_contents){
             case STRING: type_str = "STRING"; break;
             case NUMBER: type_str = "NUMBER"; break;
             case IDENTIFIER: type_str = "IDENTIFIER"; break;
+
+            case AND: type_str = "AND"; break;
+            case CLASS: type_str = "CLASS"; break;
+            case ELSE: type_str = "ELSE"; break;
+            case FALSE: type_str = "FALSE"; break;
+            case FUN: type_str = "FUN"; break;
+            case FOR: type_str = "FOR"; break;
+            case IF: type_str = "IF"; break;
+            case NIL: type_str = "NIL"; break;
+            case OR: type_str = "OR"; break;
+            case PRINT: type_str = "PRINT"; break;
+            case RETURN: type_str = "RETURN"; break;
+            case SUPER: type_str = "SUPER"; break;
+            case THIS: type_str = "THIS"; break;
+            case TRUE: type_str = "TRUE"; break;
+            case VAR: type_str = "VAR"; break;
+            case WHILE: type_str = "WHILE"; break;
 
             case SLASH: type_str = "SLASH"; break;
 
@@ -473,4 +523,16 @@ void trimTrailingZeros(char *str){
         return;
     }
     str[trim_index] = '\0';
+}
+
+TokenType getReservedToken(const char *c){
+    // TODO: [Refactor] Use hash table for efficiency in time
+        char reserved_words[N_RESERVED_WORD][MAX_LEN_RESERVED_WORD] = {"and", "class", "else", "false", "for", "fun", "if", "nil", "or", "print", "return", "super", "this", "true", "var", "while"};
+        TokenType reserved_word_tokens[N_RESERVED_WORD] = {AND, CLASS, ELSE, FALSE, FOR, FUN, IF, NIL, OR, PRINT, RETURN, SUPER, THIS, TRUE, VAR, WHILE};
+        for (int i = 0; i < N_RESERVED_WORD; i++){
+            if (strcmp(c, reserved_words[i]) == 0){
+                return reserved_word_tokens[i];
+            }
+        }
+        return INVALID_TOKEN;
 }
