@@ -50,6 +50,9 @@ int isDigit(const char c);
 
 int isIn(const char *str, const char c);
 
+void trimTrailingZeros(char *str);
+
+
 int main(int argc, char *argv[]) {
     // Disable output buffering
     setbuf(stdout, NULL);
@@ -324,6 +327,7 @@ void scanning(const char *file_contents){
                     token.type = NUMBER;
                     token.lexeme = strdup(lexeme);
                     if (isIn(lexeme, '.')){
+                        trimTrailingZeros(lexeme);
                         token.literal = strdup(lexeme);
                     } else {
                         char literal[MAX_TOKEN_SIZE];
@@ -410,4 +414,25 @@ int isIn(const char *str, const char c){
         str++;
     }
     return 0;
+}
+
+void trimTrailingZeros(char *str){
+    int is_decimal = 0;
+    int decimal_index = 0;
+    char *temp = str;
+    while (*temp){
+        if (*temp == '.'){
+            is_decimal = 1;
+            break;
+        }
+        temp++;
+        decimal_index++;
+    }
+
+    int trim_index = strlen(str);
+    for (int i = strlen(str) - 1; i > decimal_index; i--){
+        if (str[i] != '0') break;
+        trim_index = i;
+    }
+    str[trim_index] = '\0';
 }
