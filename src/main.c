@@ -106,7 +106,11 @@ int main(int argc, char *argv[]) {
         } 
         
         free(file_contents);
-    } else {
+    } else if (strcmp(command, "parse") == 0){
+        char *file_contents = read_file_contents(argv[2]);
+        printf("%s \n", file_contents);
+    } 
+    else {
         fprintf(stderr, "Unknown command: %s\n", command);
         return 1;
     }
@@ -527,12 +531,12 @@ void trimTrailingZeros(char *str){
 
 TokenType getReservedToken(const char *c){
     // TODO: [Refactor] Use hash table for efficiency in time
-        char reserved_words[N_RESERVED_WORD][MAX_LEN_RESERVED_WORD] = {"and", "class", "else", "false", "for", "fun", "if", "nil", "or", "print", "return", "super", "this", "true", "var", "while"};
-        TokenType reserved_word_tokens[N_RESERVED_WORD] = {AND, CLASS, ELSE, FALSE, FOR, FUN, IF, NIL, OR, PRINT, RETURN, SUPER, THIS, TRUE, VAR, WHILE};
-        for (int i = 0; i < N_RESERVED_WORD; i++){
-            if (strcmp(c, reserved_words[i]) == 0){
-                return reserved_word_tokens[i];
-            }
+    char reserved_words[N_RESERVED_WORD][MAX_LEN_RESERVED_WORD] = {"and", "class", "else", "false", "for", "fun", "if", "nil", "or", "print", "return", "super", "this", "true", "var", "while"};
+    TokenType reserved_word_tokens[N_RESERVED_WORD] = {AND, CLASS, ELSE, FALSE, FOR, FUN, IF, NIL, OR, PRINT, RETURN, SUPER, THIS, TRUE, VAR, WHILE};
+    for (int i = 0; i < N_RESERVED_WORD; i++){
+        if (strcmp(c, reserved_words[i]) == 0){
+            return reserved_word_tokens[i];
         }
-        return INVALID_TOKEN;
+    }
+    return INVALID_TOKEN;
 }
