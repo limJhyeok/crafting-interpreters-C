@@ -698,7 +698,7 @@ Expr* primary(Parser *self){
     if (match(self, (TokenType[]){NIL}, 1)){
         ExprLiteral* expr = malloc(sizeof(ExprLiteral));
         expr->base.accept = ExprLiteralAccept;
-        expr->value = "null";
+        expr->value = "nil";
         return (Expr *)expr;
     }
     if (match(self, (TokenType[]){NUMBER, STRING}, 2)){
