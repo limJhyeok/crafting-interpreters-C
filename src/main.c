@@ -708,7 +708,7 @@ Expr* primary(Parser *self){
         return (Expr *)expr;
     }
     if (match(self, (TokenType[]){LEFT_PAREN}, 1)){
-        Expr* expr = malloc(sizeof(Expr));
+        Expr* expr = expression(self);
         consume(self, RIGHT_PAREN, "Expect ')' after expression.");
         ExprGrouping* expr_grouping = malloc(sizeof(ExprGrouping));
         expr_grouping->base.accept = ExprGroupingAccept;
