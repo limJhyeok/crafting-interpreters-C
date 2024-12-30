@@ -453,7 +453,8 @@ int scanning(const char *file_contents){
 
                     now_type = NUMBER;
                     if (isIn(now_lexeme, '.')){
-                        trimTrailingZeros(now_lexeme);
+                        strncpy(now_literal, file_contents + start, lexeme_length);
+                        trimTrailingZeros(now_literal);
                     } else {
                         int literal_length = end - start + 1 + 2;
                         strncpy(now_literal, file_contents + start, literal_length);
@@ -487,7 +488,7 @@ int scanning(const char *file_contents){
                 now++;
                 has_error = 1;
                 continue; 
-                
+
         }
         now++;
     }
@@ -697,7 +698,7 @@ Expr* primary(Parser *self){
     if (match(self, (TokenType[]){NIL}, 1)){
         ExprLiteral* expr = malloc(sizeof(ExprLiteral));
         expr->base.accept = ExprLiteralAccept;
-        expr->value = "nil";
+        expr->value = "null";
         return (Expr *)expr;
     }
     if (match(self, (TokenType[]){NUMBER, STRING}, 2)){
