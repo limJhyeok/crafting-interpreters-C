@@ -487,6 +487,7 @@ int scanning(const char *file_contents){
                 now++;
                 has_error = 1;
                 continue; 
+                
         }
         now++;
     }
