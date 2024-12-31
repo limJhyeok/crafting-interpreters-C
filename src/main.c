@@ -241,6 +241,12 @@ int main(int argc, char *argv[]) {
         char *file_contents = read_file_contents(argv[2]);
         if (strlen(file_contents) > 0) {
             int has_error = scanning(file_contents);
+
+            if (has_error){
+                releaseTokenList();
+                exit(65);
+            } 
+
             Parser* parser = createParser();
 
             Expr* expression = parser->parse(parser);
