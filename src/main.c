@@ -727,10 +727,9 @@ Expr* primary(Parser *self){
     if (match(self, (TokenType[]){IDENTIFIER}, 1)){
         exit(65);
     }
-    
 
     had_error = 1;
-    self->parserError(self, peek(self), "Expect expression.");
+    // self->parserError(self, peek(self), "Expect expression.");
 }
 
 Expr* unary(Parser *self){
