@@ -102,8 +102,13 @@ typedef struct ExprLiteral
     char *value;
 } ExprLiteral;
 
+typedef struct ParseError{
+} ParseError;
+
+ParseError* createParseError();
+
 typedef struct Parser {
-    Token *current;
+    Token* current;
     Token* (*peek)(struct Parser*);
     int (*isAtEnd)(struct Parser*);
     Token* (*previous)(struct Parser*);
@@ -117,6 +122,9 @@ typedef struct Parser {
     Expr* (*comparison)(struct Parser*);
     Expr* (*equality)(struct Parser*);
     Expr* (*expression)(struct Parser*);
+    ParseError* (*parserError)(struct Parser*, Token*, char*);
+    void (*synchronize)(struct Parser*);
+    Expr* (*parse)(struct Parser*);
 } Parser;
 
 Token *g_head_pointer;
@@ -137,10 +145,18 @@ Expr* term(Parser* self);
 Expr* comparison(Parser* self);
 Expr* equality(Parser *self);
 Expr* expression(Parser* self);
+ParseError* parserError(Parser* self,Token* token, char* message);
+void *synchronize(Parser* self);
+Expr* parse(Parser* self);
+
 
 Token* consume(Parser* self, TokenType type, char* message);
 
 Parser* createParser();
+
+int had_error = 0;
+void report(int line, char* where, char* message);
+void error(Token* token, char* message);
 
 char* ExprBinaryAccept(Expr *self, Visitor *visitor);
 char* ExprUnaryAccept(Expr *self, Visitor *visitor);
@@ -161,8 +177,6 @@ char *AstPrinterVisitLiteralExpr(Visitor *self, Expr *expr);
 
 char *print(Visitor *self, Expr *expr);
 AstPrinter *newAstPrinter();
-
-
 
 void initTokenList();
 int isEmptyList();
@@ -229,34 +243,22 @@ int main(int argc, char *argv[]) {
             int has_error = scanning(file_contents);
             Parser* parser = createParser();
 
-            TokenType token_type_list[] = {END_OF_FILE, NUMBER, STRING};
-            // Expr* result = parser->primary(parser);
-            // if (result == NULL){
-            //     fprintf(stderr, "Error: Failed to parse expression.\n");
-            //     exit(EXIT_FAILURE);
-            // }
+            Expr* expression = parser->parse(parser);
 
-
-            // Expr* expression_result = parser->term(parser);
-            Expr* expression_result = parser->expression(parser);
-            
-            // make syntax tree
-            // Token plusToken = { PLUS, "+", NULL, 1 };
-
-            // AST 생성
-            // ExprLiteral literalLeft = { { ExprLiteralAccept }, "123" };
-            // ExprLiteral literalRight = { { ExprLiteralAccept }, "456" };
-            // ExprBinary binaryExpr = { { ExprBinaryAccept }, (Expr *)&literalLeft, &plusToken, (Expr *)&literalRight };
-            
+            if (had_error){
+                free(parser);
+                free(expression);
+                exit(EXIT_FAILURE);
+            }
 
             AstPrinter *printer = newAstPrinter();
-            // char *output = printer->print((Visitor *)printer, (Expr *)&binaryExpr);
-            char *output = printer->print((Visitor *)printer, expression_result);
+            char *output = printer->print((Visitor *)printer, expression);
 
             printf("%s\n", output);
 
-            free(expression_result);
             free(printer);
+            free(expression);
+            free(parser);
             releaseTokenList();
         }
 
@@ -715,7 +717,9 @@ Expr* primary(Parser *self){
         expr_grouping->expression = expr;
         return (Expr *)expr_grouping;
     }
-    return NULL;
+
+    had_error = 1;
+    parserError(self, peek(self), "Expect expression.");
 }
 
 Expr* unary(Parser *self){
@@ -797,10 +801,46 @@ Expr* expression(Parser* self){
     return equality(self);
 }
 
+ParseError* parserError(Parser* self,Token* token, char* message){
+    error(token, message);
+    return createParseError();
+}
+
+void *synchronize(Parser* self){
+    advance(self);
+
+    while (!isAtEnd(self)){
+        if (previous(self)->type == SEMICOLON) return NULL;
+
+        switch(peek(self)->type){
+            case CLASS:
+            case FUN:
+            case VAR:
+            case FOR:
+            case IF:
+            case WHILE:
+            case PRINT:
+            case RETURN:
+                return NULL;
+        }
+        advance(self);
+    }
+}
+
+Expr* parse(Parser* self){
+    had_error = 0;
+    Expr* result =  expression(self);
+    if (had_error){
+        return NULL;
+    }
+    return result;
+}
+
+
 Token* consume(Parser* self, TokenType type, char* message){
     if (check(self, type)) return advance(self);
-    fprintf(stderr, "Error: %s\n", message); 
-    exit(EXIT_FAILURE);
+    had_error=1;
+    parserError(self, peek(self), message);
     return NULL;
 }
 
@@ -808,6 +848,7 @@ Token* consume(Parser* self, TokenType type, char* message){
 
 Parser* createParser() {
     Parser* parser = (Parser*)malloc(sizeof(Parser));
+    ParseError* parse_error = createParseError();
     if (parser) {
         parser->current = g_head_pointer->next;
         parser->isAtEnd = isAtEnd;
@@ -823,8 +864,18 @@ Parser* createParser() {
         parser->comparison = comparison;
         parser->equality = equality;
         parser->expression = expression;
+        parser->parserError = parserError;
+        parser->parse = parse;
     }
     return parser;
+}
+
+ParseError* createParseError() {
+    ParseError* parse_error = (ParseError*)malloc(sizeof(ParseError));
+    if (parse_error){
+        // TODO
+    }
+    return parse_error;
 }
 
 char* ExprBinaryAccept(Expr *self, Visitor *visitor){
@@ -841,6 +892,23 @@ char* ExprGroupingAccept(Expr *self, Visitor *visitor){
 
 char* ExprLiteralAccept(Expr *self, Visitor *visitor){
     visitor->visitLiteralExpr(visitor, self);
+}
+
+void report(int line, char* where, char* message){
+    printf("[line %d] Error %s: %s\n", line, where, message);
+    had_error = 1;
+}
+
+void error(Token* token, char* message) {
+    char where[MAX_TOKEN_LEXEME_SIZE + 10] = {0}; // 안전한 초기화
+
+    if (token->type == END_OF_FILE) {
+        snprintf(where, sizeof(where), "at end");
+    } else {
+        snprintf(where, sizeof(where), "at '%s'", token->lexeme);
+    }
+
+    report(token->line, where, message);
 }
 
 char *parenthesize(const char *name, char **exprs, int count){
