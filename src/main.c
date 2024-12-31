@@ -248,7 +248,7 @@ int main(int argc, char *argv[]) {
             if (had_error){
                 free(parser);
                 free(expression);
-                exit(EXIT_FAILURE);
+                exit(65);
             }
 
             AstPrinter *printer = newAstPrinter();
