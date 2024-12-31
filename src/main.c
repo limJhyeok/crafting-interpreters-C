@@ -725,7 +725,7 @@ Expr* primary(Parser *self){
     }
 
     had_error = 1;
-    parserError(self, peek(self), "Expect expression.");
+    self->parserError(self, peek(self), "Expect expression.");
 }
 
 Expr* unary(Parser *self){
@@ -846,7 +846,7 @@ Expr* parse(Parser* self){
 Token* consume(Parser* self, TokenType type, char* message){
     if (check(self, type)) return advance(self);
     had_error=1;
-    parserError(self, peek(self), message);
+    self->parserError(self, peek(self), message);
     return NULL;
 }
 
