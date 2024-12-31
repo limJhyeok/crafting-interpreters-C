@@ -723,6 +723,11 @@ Expr* primary(Parser *self){
         expr_grouping->expression = expr;
         return (Expr *)expr_grouping;
     }
+    // TODO: ignore IDENTIFIER 
+    if (match(self, (TokenType[]){IDENTIFIER}, 1)){
+        exit(65);
+    }
+    
 
     had_error = 1;
     self->parserError(self, peek(self), "Expect expression.");
