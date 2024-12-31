@@ -415,7 +415,7 @@ int scanning(const char *file_contents){
                 while ((*(now+1) != '"')){
                     if (i >= file_size){
                         has_error = 1;
-                        fprintf(stderr, "[line %d] Error: Unterminated string.\n", line);
+                        // fprintf(stderr, "[line %d] Error: Unterminated string.\n", line);
                         break;
                     }
                     now++;
