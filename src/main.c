@@ -178,6 +178,24 @@ char *AstPrinterVisitLiteralExpr(Visitor *self, Expr *expr);
 char *print(Visitor *self, Expr *expr);
 AstPrinter *newAstPrinter();
 
+typedef struct Interpreter {
+    Visitor base;
+    char* (*evaluate)(struct Interpreter* self, Expr* expr);
+    void (*interpret)(struct Interpreter*, Expr*);
+} Interpreter;
+
+char* InterpreterVisitLiteralExpr(Visitor* self, Expr* expr);
+char* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr);
+char* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr);
+char* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr);
+char* evaluate(struct Interpreter* self, Expr* expr);
+void interpret(struct Interpreter* self, Expr* expr);
+
+Interpreter *createInterpreter();
+
+int isTruthy(char* object);
+int isEqual(char* a, char* b);
+
 void initTokenList();
 int isEmptyList();
 int releaseTokenList();
@@ -270,7 +288,38 @@ int main(int argc, char *argv[]) {
 
         free(file_contents);
 
-    } 
+    }
+    else if (strcmp(command, "evaluate") == 0){
+        char *file_contents = read_file_contents(argv[2]);
+        if (strlen(file_contents) > 0) {
+            int has_error = scanning(file_contents);
+
+            if (has_error){
+                releaseTokenList();
+                exit(65);
+            } 
+
+            Parser* parser = createParser();
+
+            Expr* expression = parser->parse(parser);
+
+            if (had_error){
+                free(parser);
+                free(expression);
+                exit(65);
+            }
+
+            Interpreter* interpreter = createInterpreter();
+            interpreter->interpret(interpreter, expression);
+
+            free(expression);
+            free(parser);
+            free(interpreter);
+            releaseTokenList();
+        }
+
+        free(file_contents);
+    }
     else {
         fprintf(stderr, "Unknown command: %s\n", command);
         return 1;
@@ -508,6 +557,97 @@ int scanning(const char *file_contents){
 
     return 0;
 }
+
+char* InterpreterVisitLiteralExpr(Visitor* self, Expr* expr){
+    ExprLiteral* expr_literal = (ExprLiteral*)expr;
+    return expr_literal->value;
+}
+
+// char* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr){
+//     return evaluate(self, expr->expression);
+// }
+
+char* evaluate(struct Interpreter* self, Expr* expr){
+    return expr->accept(expr, &self->base);
+}
+
+// char* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
+//     char* right = evaluate(self, expr->right);
+//     switch (expr->operator->type){
+//         case MINUS:
+//             return right;
+//         case BANG:
+//             return !isTruthy(right);
+//     }
+
+//     return NULL;
+// }
+
+// int isTruthy(char* object){
+//     if (object == NULL){
+//         return 0;
+//     }
+//     // if (object instanceof Boolean) return (boolean)object;
+//     return 1;
+// }
+
+// int isEqual(char* a, char* b){
+//     if (a == NULL && b == NULL) return 1;
+//     if (a == NULL) return 0;
+//     return strcmp(a, b) == 0 ? 1 : 0;
+// }
+
+char* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
+    Interpreter* interpreter = (Interpreter*)self;
+    ExprBinary* expr_binary = (ExprBinary*)expr;
+    char* left = evaluate(interpreter, expr_binary->left);
+    char* right = evaluate(interpreter, expr_binary->right);
+
+    switch (expr_binary->operator->type)
+    {
+    // case MINUS:
+    //     return left - right;
+    case PLUS:
+        double leftValue = atof(left);
+        double rightValue = atof(right);
+        double result = leftValue + rightValue;
+        char* char_result = (char*)malloc(32);
+        sprintf(char_result, "%f", result); // TODO: How to convert double to char
+        return char_result; 
+    // case PLUS:
+    //     if (left instanceof Double && right instanceof Double){
+    //         return left + right;
+    //     }
+    //     if (left instanceof String && right instanceof String) {
+    //       return (String)left + (String)right;
+    //     }
+    //     break;
+    // case SLASH:
+    //     return left / right;
+    // case STAR:
+    //     return left * right;
+    // case GREATER:
+    //     return left > right;
+    // case GREATER_EQUAL:
+    //     return left >= right;
+    // case LESS:
+    //     return left < right;
+    // case LESS_EQUAL:
+    //     return left <= right;
+    // case BANG_EQUAL:
+    //     return !isEqual(left, right);
+    // case EQUAL_EQUAL:
+    //     return isEqual(left, right);
+    }
+    return NULL;
+}
+
+void interpret(struct Interpreter* self, Expr* expr){
+    char* value = evaluate(self, expr);
+    printf("%s\n", value);
+    // TODO: error
+}
+
 
 void initTokenList() {
     g_head_pointer = (Token *)malloc(sizeof(Token));
@@ -984,4 +1124,15 @@ AstPrinter *newAstPrinter(){
     printer->base.visitLiteralExpr = AstPrinterVisitLiteralExpr;
     printer->print = print;
     return printer;
+}
+
+Interpreter *createInterpreter(){
+    Interpreter *interpreter = (Interpreter*)malloc(sizeof(Interpreter));
+    interpreter->base.visitLiteralExpr = InterpreterVisitLiteralExpr;
+    // interpreter->base.visitGroupingExpr = InterpreterVisitGroupingExpr;
+    interpreter->base.visitBinaryExpr = InterpreterVisitBinaryExpr;
+    // interpreter->base.visitUnaryExpr = InterpreterVisitUnaryExpr;
+    interpreter->evaluate = evaluate;
+    interpreter->interpret = interpret;
+    return interpreter;
 }
