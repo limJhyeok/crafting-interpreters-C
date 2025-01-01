@@ -577,9 +577,10 @@ char* InterpreterVisitLiteralExpr(Visitor* self, Expr* expr){
     return expr_literal->value;
 }
 
-// char* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr){
-//     return evaluate(self, expr->expression);
-// }
+char* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr){
+    ExprGrouping* expr_grouping = (ExprGrouping*)expr;
+    return evaluate((Interpreter*)self, expr_grouping->expression);
+}
 
 char* evaluate(struct Interpreter* self, Expr* expr){
     return expr->accept(expr, &self->base);
@@ -1180,7 +1181,7 @@ AstPrinter *newAstPrinter(){
 Interpreter *createInterpreter(){
     Interpreter *interpreter = (Interpreter*)malloc(sizeof(Interpreter));
     interpreter->base.visitLiteralExpr = InterpreterVisitLiteralExpr;
-    // interpreter->base.visitGroupingExpr = InterpreterVisitGroupingExpr;
+    interpreter->base.visitGroupingExpr = InterpreterVisitGroupingExpr;
     interpreter->base.visitBinaryExpr = InterpreterVisitBinaryExpr;
     // interpreter->base.visitUnaryExpr = InterpreterVisitUnaryExpr;
     interpreter->evaluate = evaluate;
