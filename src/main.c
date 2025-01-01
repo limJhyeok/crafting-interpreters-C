@@ -61,6 +61,14 @@ typedef struct Token {
     struct Token *next;
 } Token;
 
+typedef struct Object{
+    char* literal;
+    char* type;
+    struct Object* (*createObject)(char*);
+} Object;
+
+Object* createObject(char* literal);
+
 struct Visitor;
 
 typedef struct Expr
@@ -190,6 +198,9 @@ char* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr);
 char* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr);
 char* evaluate(struct Interpreter* self, Expr* expr);
 void interpret(struct Interpreter* self, Expr* expr);
+char* stringify(Object object);
+
+int endsWith(char *c, size_t c_size, char *end, size_t end_size);
 
 Interpreter *createInterpreter();
 
@@ -199,6 +210,7 @@ int isEqual(char* a, char* b);
 void initTokenList();
 int isEmptyList();
 int releaseTokenList();
+Token* createToken(TokenType type, char *lexeme, char *literal, int line);
 int insertAtTail(TokenType type, char *lexeme, char *literal, int line);
 int getSize();
 void printToken(const Token *token);
@@ -219,6 +231,8 @@ int isIn(const char *str, const char c);
 void trimTrailingZeros(char *str);
 
 TokenType getReservedToken(const char *c);
+
+Token* toToken(char *c);
 
 int main(int argc, char *argv[]) {
     // Disable output buffering
@@ -643,9 +657,37 @@ char* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
 }
 
 void interpret(struct Interpreter* self, Expr* expr){
+    // Token* token = toToken(evaluate(self, expr));
+    // char* result = stringify(token);
     char* value = evaluate(self, expr);
-    printf("%s\n", value);
+    Object* object = createObject(value);
+    printf("%s\n", stringify(*object));
     // TODO: error
+}
+
+char* stringify(Object object){
+    if (object.literal == NULL) return "nil";
+
+    if (object.type == "number"){
+        if (endsWith(object.literal, strlen(object.literal), ".0", strlen(".0"))){
+            size_t literal_size = strlen(object.literal);
+            object.literal[literal_size - 2] = '\0';
+        }
+        return object.literal;
+    }
+    return object.literal;
+}
+
+
+int endsWith(char *c, size_t c_size, char *end, size_t end_size){
+    if (end_size > c_size) {
+        return 0;
+    }
+    size_t start = c_size - end_size;
+    for (int i = 0; i < end_size; i++){
+        if (c[start+i] != end[i]) return 0;
+    }
+    return 1;
 }
 
 
@@ -677,6 +719,15 @@ int releaseTokenList() {
     free(g_tail_pointer);
     g_token_list_size = 0;
   }
+}
+Token* createToken(TokenType type, char *lexeme, char *literal, int line) {
+    Token *new_token = (Token *)malloc(sizeof(Token));
+    
+    new_token->type = type;
+    new_token->lexeme = strdup(lexeme);
+    new_token->literal = strdup(literal);
+    new_token->line = line;
+    return new_token;
 }
 
 int insertAtTail(TokenType type, char *lexeme, char *literal, int line) {
@@ -1135,4 +1186,195 @@ Interpreter *createInterpreter(){
     interpreter->evaluate = evaluate;
     interpreter->interpret = interpret;
     return interpreter;
+}
+
+Object* createObject(char* literal){
+    Object* object = (Object*)malloc(sizeof(Object));
+    object->literal = '\0';
+    object->type = '\0';
+    if (literal){
+        object->literal = literal;
+    }
+    if(isDigit(object->literal[0])){
+            object->type = "number";
+            return object;
+        }
+    if (strcmp("nil", object->literal) == 0){
+        object->literal = NULL;
+        object->type = "bool";
+        return object;
+    }
+    if(isAlpha(object->literal[0])){
+            object->type = "string";
+            return object;
+        }
+    return object;
+};
+
+
+
+Token* toToken(char *c){
+    char *now = c;
+    size_t char_size = strlen(c);
+
+    TokenType now_type;
+    char now_lexeme[MAX_TOKEN_LEXEME_SIZE] = "";
+    char now_literal[MAX_TOKEN_LITERAL_SIZE] = "";
+    int line = 1;
+
+    int has_error = 0;
+
+    for (int i = 0; i < char_size; i++){
+        switch (*now) {
+            case '(':
+                return createToken(LEFT_PAREN, "(", "\0", line);
+            case ')':
+                return createToken(RIGHT_PAREN, ")", "\0", line);
+            case '{':
+                return createToken(LEFT_BRACE, "{", "\0", line);
+            case '}':
+                return createToken(RIGHT_BRACE, "}", "\0", line);
+            case '*':
+                return createToken(STAR, "*", "\0", line);
+            case '.':
+                return createToken(DOT, ".", "\0", line);
+            case ',':
+                return createToken(COMMA, ",", "\0", line);
+            case '+':
+                return createToken(PLUS, "+", "\0", line);
+            case '-':
+                return createToken(MINUS, "-", "\0", line);
+            case '=':
+                if (*(now + 1) == '='){
+                    return createToken(EQUAL_EQUAL, "==", "\0", line);
+                } else{
+                    return createToken(EQUAL, "=", "\0", line);
+                }
+            case '!':
+                if (*(now + 1) == '='){
+                        return createToken(BANG_EQUAL, "!=", "\0", line);
+                } else{
+                    return createToken(BANG, "!", "\0", line);
+                }
+            case '<':
+                if (*(now + 1) == '='){
+                    return createToken(LESS_EQUAL, "<=", "\0", line);
+                } else{
+                    return createToken(LESS, "<", "\0", line);
+                }
+                break; 
+            case '>':
+                if (*(now + 1) == '='){
+                        return createToken(GREATER_EQUAL, ">=", "\0", line);
+                } else{
+                    return createToken(GREATER, ">", "\0", line);
+                }
+                break; 
+            case '/':
+                if (*(now + 1) == '/'){
+                    while ((*(now) != '\n') && (i < char_size)){
+                        now++;
+                        i++;
+                    }
+                    if (*(now) == '\n') line++;
+                    now++;
+                    continue;
+                } else{
+                    return createToken(SLASH, "/", "\0", line);
+                    break; 
+                }
+            case '\t':
+                now++;
+                continue;
+            case ' ':
+                now++;
+                continue;
+            case ';':
+                return createToken(SEMICOLON, ";", "\0", line);
+                break;
+            case '\n':
+                line++;
+                now++;
+                continue;
+            case '"':
+                int start = i;
+                int end = -1;
+                while ((*(now+1) != '"')){
+                    if (i >= char_size){
+                        has_error = 1;
+                        fprintf(stderr, "[line %d] Error: Unterminated string.\n", line);
+                        break;
+                    }
+                    now++;
+                    i++;
+                }
+                if (has_error) continue;
+                now++;
+                i++;
+
+                end = i;
+                int lexeme_length = end - start + 1;
+                now_type = STRING;
+
+                strncpy(now_lexeme, c + start, lexeme_length);
+                now_lexeme[lexeme_length] = '\0';
+
+                int literal_length = end - start - 1;
+                strncpy(now_literal, c + start + 1, literal_length);
+                now_literal[literal_length] = '\0';
+
+                return createToken(STRING, now_lexeme, now_literal, line);
+            default:
+                if (isDigit(*now)){
+                    int start = i;
+                    int end = -1;
+                    while ((isDigit(*(now+1)) || *(now+1) == '.')){
+                        now++;
+                        i++;
+                    }                    
+                    end = i;
+
+                    int lexeme_length = end - start + 1;
+                    strncpy(now_lexeme, c + start, lexeme_length);
+                    now_lexeme[lexeme_length] = '\0';
+                    copyStr(now_literal, "\0"); 
+
+                    now_type = NUMBER;
+                    if (isIn(now_lexeme, '.')){
+                        strncpy(now_literal, c + start, lexeme_length);
+                        trimTrailingZeros(now_literal);
+                    } else {
+                        int literal_length = end - start + 1 + 2;
+                        strncpy(now_literal, c + start, literal_length);
+                        now_literal[literal_length-2] = '.';
+                        now_literal[literal_length-1] = '0';
+                        now_literal[literal_length] = '\0';
+                    }
+                    return createToken(NUMBER, now_lexeme, now_literal, line);
+                } else if (isAlpha(*now)){
+                    int start = i;
+                    int end = -1;
+                    while (isAlphaNumeric(*(now + 1))){
+                        now++;
+                        i++;
+                    }
+                    end = i;
+                    int lexeme_length = end - start + 1;
+                    strncpy(now_lexeme, c + start, lexeme_length);
+                    now_lexeme[lexeme_length] = '\0';
+                    
+                    if (getReservedToken(now_lexeme) != INVALID_TOKEN){
+                        now_type = getReservedToken(now_lexeme); 
+                    } else {
+                        now_type = IDENTIFIER;
+                    }
+                    return createToken(now_type, now_lexeme, "\0", line);
+                }
+                fprintf(stderr, "[line %d] Error: Unexpected character: %c\n", line, *now);
+                now++;
+                has_error = 1;
+                continue; 
+        }
+        now++;
+    }
 }
