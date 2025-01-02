@@ -226,7 +226,7 @@ int endsWith(char *c, size_t c_size, char *end, size_t end_size);
 Interpreter *createInterpreter();
 
 int isTruthy(Object* object);
-int isEqual(char* a, char* b);
+TokenType isEqual(Object* a, Object* b);
 
 Object* quotientOperation(Object* left, Object* right);
 Object* multiplyOperation(Object* left, Object* right); 
@@ -724,11 +724,20 @@ Object* relationalOperation(Object* left, Object* right, int (*comparison)(doubl
     return createObject(result, literal);
 }
 
-// int isEqual(char* a, char* b){
-//     if (a == NULL && b == NULL) return 1;
-//     if (a == NULL) return 0;
-//     return strcmp(a, b) == 0 ? 1 : 0;
-// }
+TokenType isEqual(Object* left, Object* right){
+    if (left->type == NIL && right->type == NIL) return TRUE;
+    if (left->type != right->type) return FALSE;
+    if (left->type == STRING){
+        char* left_value = ((StringValue*)left->value)->string;
+        char* right_value = ((StringValue*)right->value)->string;
+        return strcmp(left_value, right_value) == 0 ? TRUE : FALSE;
+    }
+    if (left->type == NUMBER){
+        double left_value = (((NumberValue*)left->value)->number);
+        double right_value = (((NumberValue*)right->value)->number);
+        return left_value == right_value ? TRUE: FALSE;   
+    }
+}
 
 void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
     Interpreter* interpreter = (Interpreter*)self;
@@ -742,14 +751,6 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
         return minusOperation(left, right);
     case PLUS:
         return plusOperation(left, right);
-    // case PLUS:
-    //     if (left instanceof Double && right instanceof Double){
-    //         return left + right;
-    //     }
-    //     if (left instanceof String && right instanceof String) {
-    //       return (String)left + (String)right;
-    //     }
-    //     break;
     case SLASH:
         return quotientOperation(left, right);
     case STAR:
@@ -762,10 +763,11 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
         return relationalOperation(left, right, isLess);
     case LESS_EQUAL:
         return relationalOperation(left, right, isLessEqual);
-    // case BANG_EQUAL:
-    //     return !isEqual(left, right);
-    // case EQUAL_EQUAL:
-    //     return isEqual(left, right);
+    case BANG_EQUAL:
+        return isEqual(left, right) == TRUE ? createObject(FALSE, "FALSE") : createObject(TRUE, "TRUE");
+    case EQUAL_EQUAL:
+        return isEqual(left, right) == TRUE ? createObject(TRUE, "TRUE") : createObject(FALSE, "FALSE");
+
     }
 }
 
