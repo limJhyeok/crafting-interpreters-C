@@ -233,6 +233,13 @@ Object* multiplyOperation(Object* left, Object* right);
 Object* plusOperation(Object* left, Object* right);
 Object* minusOperation(Object* left, Object* right);
 
+int isGreater(double left, double right);
+int isGreaterEqual(double left, double right);
+int isLess(double left, double right);
+int isLessEqual(double left, double right);
+Object* relationalOperation(Object* left, Object* right, int (*comparison)(double, double));
+
+
 void initTokenList();
 int isEmptyList();
 int releaseTokenList();
@@ -693,6 +700,30 @@ Object* minusOperation(Object* left, Object* right){
     return createObject(NUMBER, buffer);
 }
 
+int isGreater(double left, double right){
+    return left > right;
+}
+
+int isGreaterEqual(double left, double right){
+    return left >= right;
+}
+
+int isLess(double left, double right){
+    return left < right;
+}
+
+int isLessEqual(double left, double right){
+    return left <= right;
+}
+
+Object* relationalOperation(Object* left, Object* right, int (*comparison)(double, double)){
+    double left_value = (((NumberValue*)left->value)->number);
+    double right_value = (((NumberValue*)right->value)->number);
+    TokenType result = comparison(left_value, right_value) ? TRUE : FALSE;
+    char* literal = result == TRUE ? "TRUE": "FALSE";
+    return createObject(result, literal);
+}
+
 // int isEqual(char* a, char* b){
 //     if (a == NULL && b == NULL) return 1;
 //     if (a == NULL) return 0;
@@ -723,14 +754,14 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
         return quotientOperation(left, right);
     case STAR:
         return multiplyOperation(left, right);
-    // case GREATER:
-    //     return left > right;
-    // case GREATER_EQUAL:
-    //     return left >= right;
-    // case LESS:
-    //     return left < right;
-    // case LESS_EQUAL:
-    //     return left <= right;
+    case GREATER:
+        return relationalOperation(left, right, isGreater);
+    case GREATER_EQUAL:
+        return relationalOperation(left, right, isGreaterEqual);
+    case LESS:
+        return relationalOperation(left, right, isLess);
+    case LESS_EQUAL:
+        return relationalOperation(left, right, isLessEqual);
     // case BANG_EQUAL:
     //     return !isEqual(left, right);
     // case EQUAL_EQUAL:
