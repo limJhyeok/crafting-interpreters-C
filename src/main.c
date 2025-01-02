@@ -227,6 +227,9 @@ Interpreter *createInterpreter();
 int isTruthy(Object* object);
 int isEqual(char* a, char* b);
 
+Object* quotientOperation(Object* left, Object* right);
+Object* multiplyOperation(Object* left, Object* right); 
+
 void initTokenList();
 int isEmptyList();
 int releaseTokenList();
@@ -622,14 +625,11 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
             ((NumberValue*)right->value)->number = number;
             return right;
         case BANG:
-            if (right->type == OBJ_NIL) return createObject("true");
-            if (right->type == OBJ_BOOL){
-                ((BoolValue*)right->value)->boolean = !((BoolValue*)right->value)->boolean;
-                return right;
+            int is_truthy = isTruthy(right);
+            if (is_truthy){
+                return createObject("false");
             }
-            Object* object = createObject("false");
-            return object;
-            // return !isTruthy(right);
+            return createObject("true");
     }
 
     return NULL;
@@ -637,14 +637,30 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
 
 int isTruthy(Object* object){
     if (object->type == OBJ_NIL){
-        return 1;
+        return 0;
     }
     if (object->type == OBJ_BOOL){
-        return  ((BoolValue*)object->value)->boolean;
+        return ((BoolValue*)object->value)->boolean;
     }
-    // if (object instanceof Boolean) return (boolean)object;
     return 1;
 }
+
+Object* quotientOperation(Object* left, Object* right){
+    double left_value = (double)(((NumberValue*)left->value)->number);
+    double right_value = (double)(((NumberValue*)right->value)->number);
+    double result = left_value / right_value;
+    char* buffer = (char*)malloc(sizeof(32));
+    snprintf(buffer, 32, "%.6g", result);
+    return createObject(buffer);
+};
+Object* multiplyOperation(Object* left, Object* right){
+    double left_value = (double)(((NumberValue*)left->value)->number);
+    double right_value = (double)(((NumberValue*)right->value)->number);
+    double result = left_value * right_value;
+    char* buffer = (char*)malloc(sizeof(32));
+    snprintf(buffer, 32, "%.6g", result);
+    return createObject(buffer);
+};
 
 // int isEqual(char* a, char* b){
 //     if (a == NULL && b == NULL) return 1;
@@ -653,14 +669,13 @@ int isTruthy(Object* object){
 // }
 
 void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
-    return NULL;
-    // Interpreter* interpreter = (Interpreter*)self;
-    // ExprBinary* expr_binary = (ExprBinary*)expr;
-    // Object* left = evaluate(interpreter, expr_binary->left);
-    // Object* right = evaluate(interpreter, expr_binary->right);
+    Interpreter* interpreter = (Interpreter*)self;
+    ExprBinary* expr_binary = (ExprBinary*)expr;
+    Object* left = evaluate(interpreter, expr_binary->left);
+    Object* right = evaluate(interpreter, expr_binary->right);
 
-    // switch (expr_binary->operator->type)
-    // {
+    switch (expr_binary->operator->type)
+    {
     // // case MINUS:
     // //     return left - right;
     // case PLUS:
@@ -678,10 +693,10 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
     //       return (String)left + (String)right;
     //     }
     //     break;
-    // case SLASH:
-    //     return left / right;
-    // case STAR:
-    //     return left * right;
+    case SLASH:
+        return quotientOperation(left, right);
+    case STAR:
+        return multiplyOperation(left, right);
     // case GREATER:
     //     return left > right;
     // case GREATER_EQUAL:
@@ -694,7 +709,7 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
     //     return !isEqual(left, right);
     // case EQUAL_EQUAL:
     //     return isEqual(left, right);
-    // }
+    }
 }
 
 void interpret(struct Interpreter* self, Expr* expr){
