@@ -61,16 +61,16 @@ typedef struct Token {
     struct Token *next;
 } Token;
 
-typedef enum {
-    OBJ_NUMBER,
-    OBJ_STRING,
-    OBJ_BOOL,
-    OBJ_NIL,
-    OBJ_UNKNOWN
-} ObjectType;
+// typedef enum {
+//     OBJ_NUMBER,
+//     OBJ_STRING,
+//     OBJ_BOOL,
+//     OBJ_NIL,
+//     OBJ_UNKNOWN
+// } ObjectType;
 
 typedef struct Object{
-    ObjectType type;
+    TokenType type;
     void* value;
 } Object;
 
@@ -87,7 +87,7 @@ typedef struct {
     char* string;
 } StringValue;
 
-Object* createObject(const char* literal);
+Object* createObject(TokenType type, const char* literal);
 
 struct Visitor;
 
@@ -127,6 +127,7 @@ typedef struct ExprGrouping
 typedef struct ExprLiteral
 {
     Expr base;
+    TokenType type;
     char *value;
 } ExprLiteral;
 
@@ -600,7 +601,7 @@ int scanning(const char *file_contents){
 void* InterpreterVisitLiteralExpr(Visitor* self, Expr* expr){
     ExprLiteral* expr_literal = (ExprLiteral*)expr;
     
-    Object* object = createObject(expr_literal->value);
+    Object* object = createObject(expr_literal->type, expr_literal->value);
     return object;
 
     // return expr_literal->value;
@@ -629,19 +630,19 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
         case BANG:
             int is_truthy = isTruthy(right);
             if (is_truthy){
-                return createObject("false");
+                return createObject(FALSE, "false");
             }
-            return createObject("true");
+            return createObject(TRUE, "true");
     }
 
     return NULL;
 }
 
 int isTruthy(Object* object){
-    if (object->type == OBJ_NIL){
+    if (object->type == NIL){
         return 0;
     }
-    if (object->type == OBJ_BOOL){
+    if (object->type == TRUE || object->type == FALSE){
         return ((BoolValue*)object->value)->boolean;
     }
     return 1;
@@ -653,7 +654,7 @@ Object* quotientOperation(Object* left, Object* right){
     double result = left_value / right_value;
     char* buffer = (char*)malloc(sizeof(32));
     snprintf(buffer, 32, "%.6g", result);
-    return createObject(buffer);
+    return createObject(NUMBER, buffer);
 };
 Object* multiplyOperation(Object* left, Object* right){
     double left_value = (((NumberValue*)left->value)->number);
@@ -661,16 +662,26 @@ Object* multiplyOperation(Object* left, Object* right){
     double result = left_value * right_value;
     char* buffer = (char*)malloc(sizeof(32));
     snprintf(buffer, 32, "%.6g", result);
-    return createObject(buffer);
+    return createObject(NUMBER, buffer);
 };
 
 Object* plusOperation(Object* left, Object* right){
-    double left_value = (((NumberValue*)left->value)->number);
-    double right_value = (((NumberValue*)right->value)->number);
-    double result = left_value + right_value;
-    char* buffer = (char*)malloc(sizeof(32));
-    snprintf(buffer, 32, "%.6g", result);
-    return createObject(buffer);
+    if (left->type == NUMBER && right->type == NUMBER){
+        double left_value = (((NumberValue*)left->value)->number);
+        double right_value = (((NumberValue*)right->value)->number);
+        double result = left_value + right_value;
+        char* buffer = (char*)malloc(sizeof(32));
+        snprintf(buffer, 32, "%.6g", result);
+        return createObject(NUMBER, buffer);    
+    }
+    if (left->type == STRING && right->type == STRING){
+        char* left_value = (((StringValue*)left->value)->string);
+        char* right_value = (((StringValue*)right->value)->string);
+        char* buffer = (char*)malloc(strlen(left_value)*sizeof(char) + strlen(right_value)*sizeof(char) -1); 
+        strcat(left_value, right_value);
+        return createObject(STRING, left_value);
+    }
+    
 }
 
 Object* minusOperation(Object* left, Object* right){
@@ -679,7 +690,7 @@ Object* minusOperation(Object* left, Object* right){
     double result = left_value - right_value;
     char* buffer = (char*)malloc(sizeof(32));
     snprintf(buffer, 32, "%.6g", result);
-    return createObject(buffer);
+    return createObject(NUMBER, buffer);
 }
 
 // int isEqual(char* a, char* b){
@@ -736,22 +747,20 @@ void interpret(struct Interpreter* self, Expr* expr){
 char* stringify(Object object){
     if (object.value == NULL) return "nil";
 
-    if (object.type == OBJ_NUMBER){
+    if (object.type == NUMBER){
         double number = (((NumberValue*)object.value)->number);
         char* buffer = (char*)malloc(32);
         snprintf(buffer, 32, "%.6g", number);
         return buffer;
     }
-    if (object.type == OBJ_STRING) {
+    if (object.type == STRING) {
         return ((StringValue*)object.value)->string;
     }
-    if (object.type == OBJ_BOOL) {
+    if (object.type == TRUE || object.type == FALSE) {
         return ((BoolValue*)object.value)->boolean != 0 ? "true" : "false";
     }
-    if (object.type == OBJ_UNKNOWN){
-        fprintf(stderr, "Unknown type error\n");
-        exit(EXIT_FAILURE);
-    }
+    fprintf(stderr, "Unknown type error\n");
+    exit(EXIT_FAILURE);
 }
 
 
@@ -961,27 +970,40 @@ Expr* primary(Parser *self){
     if (match(self, (TokenType[]){FALSE}, 1)){
         ExprLiteral* expr = malloc(sizeof(ExprLiteral));
         expr->base.accept = ExprLiteralAccept;
+        expr->type = FALSE;
         expr->value = "false";
         return (Expr *)expr;
     }
     if (match(self, (TokenType[]){TRUE}, 1)){
         ExprLiteral* expr = malloc(sizeof(ExprLiteral));
         expr->base.accept = ExprLiteralAccept;
+        expr->type = TRUE;
         expr->value = "true";
         return (Expr *)expr;
     }
     if (match(self, (TokenType[]){NIL}, 1)){
         ExprLiteral* expr = malloc(sizeof(ExprLiteral));
         expr->base.accept = ExprLiteralAccept;
+        expr->type = NIL;
         expr->value = "nil";
         return (Expr *)expr;
     }
-    if (match(self, (TokenType[]){NUMBER, STRING}, 2)){
+    // TODO: NUMBER, STRING 합치기
+    if (match(self, (TokenType[]){NUMBER}, 1)){
         ExprLiteral* expr = malloc(sizeof(ExprLiteral));
         expr->base.accept = ExprLiteralAccept;
+        expr->type = NUMBER;
         expr->value = previous(self)->literal;
         return (Expr *)expr;
     }
+    if (match(self, (TokenType[]){STRING}, 1)){
+        ExprLiteral* expr = malloc(sizeof(ExprLiteral));
+        expr->base.accept = ExprLiteralAccept;
+        expr->type = STRING;
+        expr->value = previous(self)->literal;
+        return (Expr *)expr;
+    }
+
     if (match(self, (TokenType[]){LEFT_PAREN}, 1)){
         Expr* expr = expression(self);
         consume(self, RIGHT_PAREN, "Expect ')' after expression.");
@@ -1264,14 +1286,15 @@ Interpreter *createInterpreter(){
     return interpreter;
 }
 
-Object* createObject(const char* literal){
+Object* createObject(TokenType type,  const char* literal){
     Object* object = (Object*)malloc(sizeof(Object));
     if (!object) {
         fprintf(stderr, "Memory allocation failed\n");
         exit(EXIT_FAILURE);
     }
-    if (isDigit(literal[0]) || (literal[0] == '-' && isDigit(literal[1]))) {
-        object->type = OBJ_NUMBER;
+    // if (isDigit(literal[0]) || (literal[0] == '-' && isDigit(literal[1]))) {
+    if (type == NUMBER){
+        object->type = NUMBER;
         NumberValue* num = (NumberValue*)malloc(sizeof(NumberValue));
         num->number = strtod(literal, NULL); // 문자열 -> 숫자 변환
         object->value = num;
@@ -1279,15 +1302,17 @@ Object* createObject(const char* literal){
     }
 
     // Boolean 타입 판별
-    if (strcmp(literal, "true") == 0) {
-        object->type = OBJ_BOOL;
+    // if (strcmp(literal, "true") == 0) {
+    if (type == TRUE){
+        object->type = TRUE;
         BoolValue* boolVal = (BoolValue*)malloc(sizeof(BoolValue));
         boolVal->boolean = 1;
         object->value = boolVal;
         return object;
     }
-    if (strcmp(literal, "false") == 0) {
-        object->type = OBJ_BOOL;
+    // if (strcmp(literal, "false") == 0) {
+    if (type == FALSE){
+        object->type = FALSE;
         BoolValue* boolVal = (BoolValue*)malloc(sizeof(BoolValue));
         boolVal->boolean = 0;
         object->value = boolVal;
@@ -1295,17 +1320,20 @@ Object* createObject(const char* literal){
     }
 
     // Nil 타입 판별
-    if (strcmp(literal, "nil") == 0) {
-        object->type = OBJ_NIL;
+    // if (strcmp(literal, "nil") == 0) {
+    if (type == NIL){
+        object->type = NIL;
         object->value = NULL;
         return object;
     }
 
-    // 문자열 타입
-    object->type = OBJ_STRING;
-    StringValue* str = (StringValue*)malloc(sizeof(StringValue));
-    str->string = strdup(literal); // 문자열 복사
-    object->value = str;
+    if (type == STRING){
+        object->type = STRING;
+        StringValue* str = (StringValue*)malloc(sizeof(StringValue));
+        str->string = strdup(literal); // 문자열 복사
+        object->value = str;
+    }
+
 
     return object;
 };
