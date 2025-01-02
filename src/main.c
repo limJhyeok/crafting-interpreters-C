@@ -61,26 +61,46 @@ typedef struct Token {
     struct Token *next;
 } Token;
 
+typedef enum {
+    OBJ_NUMBER,
+    OBJ_STRING,
+    OBJ_BOOL,
+    OBJ_NIL,
+    OBJ_UNKNOWN
+} ObjectType;
+
 typedef struct Object{
-    char* literal;
-    char* type;
-    struct Object* (*createObject)(char*);
+    ObjectType type;
+    void* value;
 } Object;
 
-Object* createObject(char* literal);
+typedef struct {
+    double number;
+} NumberValue;
+
+typedef struct {
+    int boolean; // 1 (true) or 0 (false)
+} BoolValue;
+
+// 문자열 값 저장용 구조체
+typedef struct {
+    char* string;
+} StringValue;
+
+Object* createObject(const char* literal);
 
 struct Visitor;
 
 typedef struct Expr
 {
-    char* (*accept)(struct Expr *self, struct Visitor *visitor);
+    void* (*accept)(struct Expr *self, struct Visitor *visitor);
 } Expr;
 
 typedef struct Visitor {
-    char *(*visitBinaryExpr)(struct Visitor *self, Expr *expr);
-    char *(*visitUnaryExpr)(struct Visitor *self, Expr *expr);
-    char *(*visitGroupingExpr)(struct Visitor *self, Expr *expr);
-    char *(*visitLiteralExpr)(struct Visitor *self, Expr *expr);
+    void *(*visitBinaryExpr)(struct Visitor *self, Expr *expr);
+    void *(*visitUnaryExpr)(struct Visitor *self, Expr *expr);
+    void *(*visitGroupingExpr)(struct Visitor *self, Expr *expr);
+    void *(*visitLiteralExpr)(struct Visitor *self, Expr *expr);
 } Visitor;
 
 typedef struct ExprBinary
@@ -164,12 +184,12 @@ Parser* createParser();
 
 int had_error = 0;
 void report(int line, char* where, char* message);
-void error(Token* token, char* message);
+void error(Token* token, char* message);    
 
-char* ExprBinaryAccept(Expr *self, Visitor *visitor);
-char* ExprUnaryAccept(Expr *self, Visitor *visitor);
-char* ExprGroupingAccept(Expr *self, Visitor *visitor);
-char* ExprLiteralAccept(Expr *self, Visitor *visitor);
+void* ExprBinaryAccept(Expr *self, Visitor *visitor);
+void* ExprUnaryAccept(Expr *self, Visitor *visitor);
+void* ExprGroupingAccept(Expr *self, Visitor *visitor);
+void* ExprLiteralAccept(Expr *self, Visitor *visitor);
 
 typedef struct AstPrinter{
     Visitor base;
@@ -178,25 +198,25 @@ typedef struct AstPrinter{
 
 char *parenthesize(const char *name, char **exprs, int count);
 
-char *AstPrinterVisitBinaryExpr(Visitor *self, Expr *expr);
-char *AstPrinterVisitUnaryExpr(Visitor *self, Expr *expr);
-char *AstPrinterVisitGroupingExpr(Visitor *self, Expr *expr);
-char *AstPrinterVisitLiteralExpr(Visitor *self, Expr *expr);
+void *AstPrinterVisitBinaryExpr(Visitor *self, Expr *expr);
+void *AstPrinterVisitUnaryExpr(Visitor *self, Expr *expr);
+void *AstPrinterVisitGroupingExpr(Visitor *self, Expr *expr);
+void *AstPrinterVisitLiteralExpr(Visitor *self, Expr *expr);
 
 char *print(Visitor *self, Expr *expr);
 AstPrinter *newAstPrinter();
 
 typedef struct Interpreter {
     Visitor base;
-    char* (*evaluate)(struct Interpreter* self, Expr* expr);
+    Object* (*evaluate)(struct Interpreter* self, Expr* expr);
     void (*interpret)(struct Interpreter*, Expr*);
 } Interpreter;
 
-char* InterpreterVisitLiteralExpr(Visitor* self, Expr* expr);
-char* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr);
-char* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr);
-char* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr);
-char* evaluate(struct Interpreter* self, Expr* expr);
+void* InterpreterVisitLiteralExpr(Visitor* self, Expr* expr);
+void* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr);
+void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr);
+void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr);
+Object* evaluate(struct Interpreter* self, Expr* expr);
 void interpret(struct Interpreter* self, Expr* expr);
 char* stringify(Object object);
 
@@ -204,7 +224,7 @@ int endsWith(char *c, size_t c_size, char *end, size_t end_size);
 
 Interpreter *createInterpreter();
 
-int isTruthy(char* object);
+int isTruthy(Object* object);
 int isEqual(char* a, char* b);
 
 void initTokenList();
@@ -572,39 +592,59 @@ int scanning(const char *file_contents){
     return 0;
 }
 
-char* InterpreterVisitLiteralExpr(Visitor* self, Expr* expr){
+void* InterpreterVisitLiteralExpr(Visitor* self, Expr* expr){
     ExprLiteral* expr_literal = (ExprLiteral*)expr;
-    return expr_literal->value;
+    
+    Object* object = createObject(expr_literal->value);
+    return object;
+
+    // return expr_literal->value;
 }
 
-char* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr){
+void* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr){
     ExprGrouping* expr_grouping = (ExprGrouping*)expr;
+
     return evaluate((Interpreter*)self, expr_grouping->expression);
 }
 
-char* evaluate(struct Interpreter* self, Expr* expr){
-    return expr->accept(expr, &self->base);
+Object* evaluate(struct Interpreter* self, Expr* expr){
+    return (Object*)expr->accept(expr, &self->base);
 }
 
-// char* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
-//     char* right = evaluate(self, expr->right);
-//     switch (expr->operator->type){
-//         case MINUS:
-//             return right;
-//         case BANG:
-//             return !isTruthy(right);
-//     }
+void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
+    ExprUnary* expr_unary = (ExprUnary*)expr;
 
-//     return NULL;
-// }
+    Object* right = evaluate((Interpreter*)self, expr_unary->right);
+    switch (expr_unary->operator->type){
+        case MINUS:
+            double number = (double)(((NumberValue*)right->value)->number);
+            number = -number;
+            ((NumberValue*)right->value)->number = number;
+            return right;
+        case BANG:
+            if (right->value == NULL) return right;
+            if (right->type == OBJ_BOOL){
+                ((BoolValue*)right->value)->boolean = !((BoolValue*)right->value)->boolean;
+                return right;
+            }
+            Object* object = createObject("false");
+            return object;
+            // return !isTruthy(right);
+    }
 
-// int isTruthy(char* object){
-//     if (object == NULL){
-//         return 0;
-//     }
-//     // if (object instanceof Boolean) return (boolean)object;
-//     return 1;
-// }
+    return NULL;
+}
+
+int isTruthy(Object* object){
+    if (object->value == NULL){
+        return 1;
+    }
+    if (object->type == OBJ_BOOL){
+        return  ((BoolValue*)object->value)->boolean;
+    }
+    // if (object instanceof Boolean) return (boolean)object;
+    return 1;
+}
 
 // int isEqual(char* a, char* b){
 //     if (a == NULL && b == NULL) return 1;
@@ -612,23 +652,24 @@ char* evaluate(struct Interpreter* self, Expr* expr){
 //     return strcmp(a, b) == 0 ? 1 : 0;
 // }
 
-char* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
-    Interpreter* interpreter = (Interpreter*)self;
-    ExprBinary* expr_binary = (ExprBinary*)expr;
-    char* left = evaluate(interpreter, expr_binary->left);
-    char* right = evaluate(interpreter, expr_binary->right);
+void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
+    return NULL;
+    // Interpreter* interpreter = (Interpreter*)self;
+    // ExprBinary* expr_binary = (ExprBinary*)expr;
+    // Object* left = evaluate(interpreter, expr_binary->left);
+    // Object* right = evaluate(interpreter, expr_binary->right);
 
-    switch (expr_binary->operator->type)
-    {
-    // case MINUS:
-    //     return left - right;
-    case PLUS:
-        double leftValue = atof(left);
-        double rightValue = atof(right);
-        double result = leftValue + rightValue;
-        char* char_result = (char*)malloc(32);
-        sprintf(char_result, "%f", result); // TODO: How to convert double to char
-        return char_result; 
+    // switch (expr_binary->operator->type)
+    // {
+    // // case MINUS:
+    // //     return left - right;
+    // case PLUS:
+    //     double leftValue = atof(left);
+    //     double rightValue = atof(right);
+    //     double result = leftValue + rightValue;
+    //     char* char_result = (char*)malloc(32);
+    //     sprintf(char_result, "%f", result); // TODO: How to convert double to char
+    //     return char_result; 
     // case PLUS:
     //     if (left instanceof Double && right instanceof Double){
     //         return left + right;
@@ -653,30 +694,34 @@ char* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
     //     return !isEqual(left, right);
     // case EQUAL_EQUAL:
     //     return isEqual(left, right);
-    }
-    return NULL;
+    // }
 }
 
 void interpret(struct Interpreter* self, Expr* expr){
-    // Token* token = toToken(evaluate(self, expr));
-    // char* result = stringify(token);
-    char* value = evaluate(self, expr);
-    Object* object = createObject(value);
+    Object* object = evaluate(self, expr);
     printf("%s\n", stringify(*object));
     // TODO: error
 }
 
 char* stringify(Object object){
-    if (object.literal == NULL) return "nil";
+    if (object.value == NULL) return "nil";
 
-    if (object.type == "number"){
-        if (endsWith(object.literal, strlen(object.literal), ".0", strlen(".0"))){
-            size_t literal_size = strlen(object.literal);
-            object.literal[literal_size - 2] = '\0';
-        }
-        return object.literal;
+    if (object.type == OBJ_NUMBER){
+        double number = (double)(((NumberValue*)object.value)->number);
+        char* buffer = (char*)malloc(32);
+        snprintf(buffer, 32, "%.6g", number);
+        return buffer;
     }
-    return object.literal;
+    if (object.type == OBJ_STRING) {
+        return ((StringValue*)object.value)->string;
+    }
+    if (object.type == OBJ_BOOL) {
+        return ((BoolValue*)object.value)->boolean != 0 ? "true" : "false";
+    }
+    if (object.type == OBJ_UNKNOWN){
+        fprintf(stderr, "Unknown type error\n");
+        exit(EXIT_FAILURE);
+    }
 }
 
 
@@ -1080,19 +1125,19 @@ ParseError* createParseError() {
     return parse_error;
 }
 
-char* ExprBinaryAccept(Expr *self, Visitor *visitor){
+void* ExprBinaryAccept(Expr *self, Visitor *visitor){
     visitor->visitBinaryExpr(visitor, self);
 }
 
-char* ExprUnaryAccept(Expr *self, Visitor *visitor){
+void* ExprUnaryAccept(Expr *self, Visitor *visitor){
     visitor->visitUnaryExpr(visitor, self);
 }
 
-char* ExprGroupingAccept(Expr *self, Visitor *visitor){
+void* ExprGroupingAccept(Expr *self, Visitor *visitor){
     visitor->visitGroupingExpr(visitor, self);
 }
 
-char* ExprLiteralAccept(Expr *self, Visitor *visitor){
+void* ExprLiteralAccept(Expr *self, Visitor *visitor){
     visitor->visitLiteralExpr(visitor, self);
 }
 
@@ -1132,7 +1177,7 @@ char *parenthesize(const char *name, char **exprs, int count){
     return result;
 }
 
-char *AstPrinterVisitBinaryExpr(Visitor *self, Expr *expr) {
+void *AstPrinterVisitBinaryExpr(Visitor *self, Expr *expr) {
     ExprBinary *binaryExpr = (ExprBinary *)expr;
     char *left = binaryExpr->left->accept(binaryExpr->left, self);
     char *right = binaryExpr->right->accept(binaryExpr->right, self);
@@ -1142,7 +1187,7 @@ char *AstPrinterVisitBinaryExpr(Visitor *self, Expr *expr) {
     return result;
 }
 
-char *AstPrinterVisitUnaryExpr(Visitor *self, Expr *expr){
+void *AstPrinterVisitUnaryExpr(Visitor *self, Expr *expr){
     ExprUnary *unaryExpr = (ExprUnary *)expr;
     char *right = unaryExpr->right->accept(unaryExpr->right, self);
     char *result = parenthesize(unaryExpr->operator->lexeme, (char *[]){right}, 1);
@@ -1150,7 +1195,7 @@ char *AstPrinterVisitUnaryExpr(Visitor *self, Expr *expr){
     return result;
 }
 
-char *AstPrinterVisitGroupingExpr(Visitor *self, Expr *expr){
+void *AstPrinterVisitGroupingExpr(Visitor *self, Expr *expr){
     ExprGrouping *groupingExpr = (ExprGrouping *)expr;
     char *expression = groupingExpr->expression->accept(groupingExpr->expression, self);
     char *result = parenthesize("group", (char *[]){expression}, 1);
@@ -1158,14 +1203,14 @@ char *AstPrinterVisitGroupingExpr(Visitor *self, Expr *expr){
     return result;
 }
 
-char *AstPrinterVisitLiteralExpr(Visitor *self, Expr *expr){
+void *AstPrinterVisitLiteralExpr(Visitor *self, Expr *expr){
     ExprLiteral *literalExpr = (ExprLiteral *)expr;
     if (!literalExpr -> value) return strdup("nil");
     return strdup(literalExpr->value);
 }
 
 char *print(Visitor *self, Expr *expr){
-    return expr->accept(expr, self);
+    return (char*)expr->accept(expr, self);
 }
 
 AstPrinter *newAstPrinter(){
@@ -1183,32 +1228,55 @@ Interpreter *createInterpreter(){
     interpreter->base.visitLiteralExpr = InterpreterVisitLiteralExpr;
     interpreter->base.visitGroupingExpr = InterpreterVisitGroupingExpr;
     interpreter->base.visitBinaryExpr = InterpreterVisitBinaryExpr;
-    // interpreter->base.visitUnaryExpr = InterpreterVisitUnaryExpr;
+    interpreter->base.visitUnaryExpr = InterpreterVisitUnaryExpr;
     interpreter->evaluate = evaluate;
     interpreter->interpret = interpret;
     return interpreter;
 }
 
-Object* createObject(char* literal){
+Object* createObject(const char* literal){
     Object* object = (Object*)malloc(sizeof(Object));
-    object->literal = '\0';
-    object->type = '\0';
-    if (literal){
-        object->literal = literal;
+    if (!object) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
     }
-    if(isDigit(object->literal[0])){
-            object->type = "number";
-            return object;
-        }
-    if (strcmp("nil", object->literal) == 0){
-        object->literal = NULL;
-        object->type = "bool";
+    if (isDigit(literal[0]) || (literal[0] == '-' && isDigit(literal[1]))) {
+        object->type = OBJ_NUMBER;
+        NumberValue* num = (NumberValue*)malloc(sizeof(NumberValue));
+        num->number = strtod(literal, NULL); // 문자열 -> 숫자 변환
+        object->value = num;
         return object;
     }
-    if(isAlpha(object->literal[0])){
-            object->type = "string";
-            return object;
-        }
+
+    // Boolean 타입 판별
+    if (strcmp(literal, "true") == 0) {
+        object->type = OBJ_BOOL;
+        BoolValue* boolVal = (BoolValue*)malloc(sizeof(BoolValue));
+        boolVal->boolean = 1;
+        object->value = boolVal;
+        return object;
+    }
+    if (strcmp(literal, "false") == 0) {
+        object->type = OBJ_BOOL;
+        BoolValue* boolVal = (BoolValue*)malloc(sizeof(BoolValue));
+        boolVal->boolean = 0;
+        object->value = boolVal;
+        return object;
+    }
+
+    // Nil 타입 판별
+    if (strcmp(literal, "nil") == 0) {
+        object->type = OBJ_NIL;
+        object->value = NULL;
+        return object;
+    }
+
+    // 문자열 타입
+    object->type = OBJ_STRING;
+    StringValue* str = (StringValue*)malloc(sizeof(StringValue));
+    str->string = strdup(literal); // 문자열 복사
+    object->value = str;
+
     return object;
 };
 
