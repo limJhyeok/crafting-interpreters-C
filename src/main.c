@@ -618,8 +618,6 @@ void* InterpreterVisitLiteralExpr(Visitor* self, Expr* expr){
     
     Object* object = createObject(expr_literal->type, expr_literal->value);
     return object;
-
-    // return expr_literal->value;
 }
 
 void* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr){
@@ -712,6 +710,7 @@ Object* plusOperation(Object* left, Object* right){
         strcat(left_value, right_value);
         return createObject(STRING, left_value);
     }
+    return NULL;
 }
 
 Object* minusOperation(Object* left, Object* right){
@@ -777,11 +776,12 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
             if (runtime_error) return runtime_error;
             return minusOperation(left, right);
         case PLUS:
-            return plusOperation(left, right);
-            
+            Object* object = plusOperation(left, right);
+            if (object) return object;
+
             runtime_error_flag = 1;
             runtime_error = createRuntimeError(*expr_binary->operator,
-                    "Operands must be two numbers or two strings."); 
+                                             "Operands must be two numbers or two strings.");
             return runtime_error;
         case SLASH:
             runtime_error = checkNumberOperands(*expr_binary->operator, *left, *right);
