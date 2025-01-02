@@ -229,6 +229,8 @@ int isEqual(char* a, char* b);
 
 Object* quotientOperation(Object* left, Object* right);
 Object* multiplyOperation(Object* left, Object* right); 
+Object* plusOperation(Object* left, Object* right);
+Object* minusOperation(Object* left, Object* right);
 
 void initTokenList();
 int isEmptyList();
@@ -620,7 +622,7 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
     Object* right = evaluate((Interpreter*)self, expr_unary->right);
     switch (expr_unary->operator->type){
         case MINUS:
-            double number = (double)(((NumberValue*)right->value)->number);
+            double number = (((NumberValue*)right->value)->number);
             number = -number;
             ((NumberValue*)right->value)->number = number;
             return right;
@@ -646,21 +648,39 @@ int isTruthy(Object* object){
 }
 
 Object* quotientOperation(Object* left, Object* right){
-    double left_value = (double)(((NumberValue*)left->value)->number);
-    double right_value = (double)(((NumberValue*)right->value)->number);
+    double left_value = (((NumberValue*)left->value)->number);
+    double right_value = (((NumberValue*)right->value)->number);
     double result = left_value / right_value;
     char* buffer = (char*)malloc(sizeof(32));
     snprintf(buffer, 32, "%.6g", result);
     return createObject(buffer);
 };
 Object* multiplyOperation(Object* left, Object* right){
-    double left_value = (double)(((NumberValue*)left->value)->number);
-    double right_value = (double)(((NumberValue*)right->value)->number);
+    double left_value = (((NumberValue*)left->value)->number);
+    double right_value = (((NumberValue*)right->value)->number);
     double result = left_value * right_value;
     char* buffer = (char*)malloc(sizeof(32));
     snprintf(buffer, 32, "%.6g", result);
     return createObject(buffer);
 };
+
+Object* plusOperation(Object* left, Object* right){
+    double left_value = (((NumberValue*)left->value)->number);
+    double right_value = (((NumberValue*)right->value)->number);
+    double result = left_value + right_value;
+    char* buffer = (char*)malloc(sizeof(32));
+    snprintf(buffer, 32, "%.6g", result);
+    return createObject(buffer);
+}
+
+Object* minusOperation(Object* left, Object* right){
+    double left_value = (((NumberValue*)left->value)->number);
+    double right_value = (((NumberValue*)right->value)->number);
+    double result = left_value - right_value;
+    char* buffer = (char*)malloc(sizeof(32));
+    snprintf(buffer, 32, "%.6g", result);
+    return createObject(buffer);
+}
 
 // int isEqual(char* a, char* b){
 //     if (a == NULL && b == NULL) return 1;
@@ -676,15 +696,10 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
 
     switch (expr_binary->operator->type)
     {
-    // // case MINUS:
-    // //     return left - right;
-    // case PLUS:
-    //     double leftValue = atof(left);
-    //     double rightValue = atof(right);
-    //     double result = leftValue + rightValue;
-    //     char* char_result = (char*)malloc(32);
-    //     sprintf(char_result, "%f", result); // TODO: How to convert double to char
-    //     return char_result; 
+    case MINUS:
+        return minusOperation(left, right);
+    case PLUS:
+        return plusOperation(left, right);
     // case PLUS:
     //     if (left instanceof Double && right instanceof Double){
     //         return left + right;
@@ -722,7 +737,7 @@ char* stringify(Object object){
     if (object.value == NULL) return "nil";
 
     if (object.type == OBJ_NUMBER){
-        double number = (double)(((NumberValue*)object.value)->number);
+        double number = (((NumberValue*)object.value)->number);
         char* buffer = (char*)malloc(32);
         snprintf(buffer, 32, "%.6g", number);
         return buffer;
