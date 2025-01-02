@@ -622,7 +622,7 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
             ((NumberValue*)right->value)->number = number;
             return right;
         case BANG:
-            if (right->value == NULL) return right;
+            if (right->type == OBJ_NIL) return createObject("true");
             if (right->type == OBJ_BOOL){
                 ((BoolValue*)right->value)->boolean = !((BoolValue*)right->value)->boolean;
                 return right;
@@ -636,7 +636,7 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
 }
 
 int isTruthy(Object* object){
-    if (object->value == NULL){
+    if (object->type == OBJ_NIL){
         return 1;
     }
     if (object->type == OBJ_BOOL){
