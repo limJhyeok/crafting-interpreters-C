@@ -213,6 +213,16 @@ typedef struct Interpreter {
     void (*interpret)(struct Interpreter*, Expr*);
 } Interpreter;
 
+typedef struct RuntimeError {
+    Token token;
+    char* message;
+} RuntimeError;
+
+RuntimeError* createRuntimeError(Token token, char* message);
+RuntimeError* checkNumberOperand(Token operator, Object operand);
+RuntimeError* checkNumberOperands(Token operator, Object left, Object right);
+int runtime_error_flag = 0;
+
 void* InterpreterVisitLiteralExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr);
@@ -264,8 +274,6 @@ int isIn(const char *str, const char c);
 void trimTrailingZeros(char *str);
 
 TokenType getReservedToken(const char *c);
-
-Token* toToken(char *c);
 
 int main(int argc, char *argv[]) {
     // Disable output buffering
@@ -630,6 +638,8 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
     Object* right = evaluate((Interpreter*)self, expr_unary->right);
     switch (expr_unary->operator->type){
         case MINUS:
+            RuntimeError* runtime_error = checkNumberOperand(*expr_unary->operator, *right);
+            if (runtime_error_flag) return runtime_error;
             double number = (((NumberValue*)right->value)->number);
             number = -number;
             ((NumberValue*)right->value)->number = number;
@@ -644,6 +654,20 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
 
     return NULL;
 }
+
+RuntimeError* checkNumberOperand(Token operator, Object operand){
+    if (operand.type == NUMBER) return NULL;
+    runtime_error_flag = 1;
+    
+    return createRuntimeError(operator, "Operand must be a number.");
+}
+
+RuntimeError* checkNumberOperands(Token operator, Object left, Object right){
+    if (left.type == NUMBER && right.type == NUMBER) return NULL;
+    runtime_error_flag = 1;
+    return createRuntimeError(operator, "Operands must be numbers.");
+}
+
 
 int isTruthy(Object* object){
     if (object->type == NIL){
@@ -688,7 +712,6 @@ Object* plusOperation(Object* left, Object* right){
         strcat(left_value, right_value);
         return createObject(STRING, left_value);
     }
-    
 }
 
 Object* minusOperation(Object* left, Object* right){
@@ -727,6 +750,7 @@ Object* relationalOperation(Object* left, Object* right, int (*comparison)(doubl
 TokenType isEqual(Object* left, Object* right){
     if (left->type == NIL && right->type == NIL) return TRUE;
     if (left->type != right->type) return FALSE;
+
     if (left->type == STRING){
         char* left_value = ((StringValue*)left->value)->string;
         char* right_value = ((StringValue*)right->value)->string;
@@ -745,36 +769,66 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
     Object* left = evaluate(interpreter, expr_binary->left);
     Object* right = evaluate(interpreter, expr_binary->right);
 
+    RuntimeError* runtime_error;
     switch (expr_binary->operator->type)
     {
-    case MINUS:
-        return minusOperation(left, right);
-    case PLUS:
-        return plusOperation(left, right);
-    case SLASH:
-        return quotientOperation(left, right);
-    case STAR:
-        return multiplyOperation(left, right);
-    case GREATER:
-        return relationalOperation(left, right, isGreater);
-    case GREATER_EQUAL:
-        return relationalOperation(left, right, isGreaterEqual);
-    case LESS:
-        return relationalOperation(left, right, isLess);
-    case LESS_EQUAL:
-        return relationalOperation(left, right, isLessEqual);
-    case BANG_EQUAL:
-        return isEqual(left, right) == TRUE ? createObject(FALSE, "FALSE") : createObject(TRUE, "TRUE");
-    case EQUAL_EQUAL:
-        return isEqual(left, right) == TRUE ? createObject(TRUE, "TRUE") : createObject(FALSE, "FALSE");
+        case MINUS:
+            runtime_error = checkNumberOperands(*expr_binary->operator, *left, *right);
+            if (runtime_error) return runtime_error;
+            return minusOperation(left, right);
+        case PLUS:
+            return plusOperation(left, right);
+            
+            runtime_error_flag = 1;
+            runtime_error = createRuntimeError(*expr_binary->operator,
+                    "Operands must be two numbers or two strings."); 
+            return runtime_error;
+        case SLASH:
+            runtime_error = checkNumberOperands(*expr_binary->operator, *left, *right);
+            if (runtime_error) return runtime_error;
 
+            return quotientOperation(left, right);
+        case STAR:
+            runtime_error = checkNumberOperands(*expr_binary->operator, *left, *right);
+            if (runtime_error) return runtime_error;
+
+            return multiplyOperation(left, right);
+        case GREATER:
+            runtime_error = checkNumberOperands(*expr_binary->operator, *left, *right);
+            if (runtime_error) return runtime_error;
+
+            return relationalOperation(left, right, isGreater);
+        case GREATER_EQUAL:
+            runtime_error = checkNumberOperands(*expr_binary->operator, *left, *right);
+            if (runtime_error) return runtime_error;
+
+            return relationalOperation(left, right, isGreaterEqual);
+        case LESS:
+            runtime_error = checkNumberOperands(*expr_binary->operator, *left, *right);
+            if (runtime_error) return runtime_error;
+
+            return relationalOperation(left, right, isLess);
+        case LESS_EQUAL:
+            runtime_error = checkNumberOperands(*expr_binary->operator, *left, *right);
+            if (runtime_error) return runtime_error;
+
+            return relationalOperation(left, right, isLessEqual);
+        case BANG_EQUAL:
+            return isEqual(left, right) == TRUE ? createObject(FALSE, "FALSE") : createObject(TRUE, "TRUE");
+        case EQUAL_EQUAL:
+            return isEqual(left, right) == TRUE ? createObject(TRUE, "TRUE") : createObject(FALSE, "FALSE");
     }
 }
 
 void interpret(struct Interpreter* self, Expr* expr){
     Object* object = evaluate(self, expr);
-    printf("%s\n", stringify(*object));
-    // TODO: error
+    if (runtime_error_flag){
+        RuntimeError* runtime_error = (RuntimeError*)object;
+        fprintf(stderr, "%s\n [line %d ]", runtime_error->message, runtime_error->token.line);
+        exit(70);
+    } else {
+        printf("%s\n", stringify(*object));
+    }
 }
 
 char* stringify(Object object){
@@ -1210,6 +1264,16 @@ ParseError* createParseError() {
     return parse_error;
 }
 
+
+RuntimeError* createRuntimeError(Token token, char* message){
+    RuntimeError* runtime_error = (RuntimeError*)malloc(sizeof(RuntimeError));
+    if (runtime_error){
+        runtime_error->token = token;
+        runtime_error->message = message;
+    }
+    return runtime_error;
+}
+
 void* ExprBinaryAccept(Expr *self, Visitor *visitor){
     visitor->visitBinaryExpr(visitor, self);
 }
@@ -1325,7 +1389,6 @@ Object* createObject(TokenType type,  const char* literal){
         fprintf(stderr, "Memory allocation failed\n");
         exit(EXIT_FAILURE);
     }
-    // if (isDigit(literal[0]) || (literal[0] == '-' && isDigit(literal[1]))) {
     if (type == NUMBER){
         object->type = NUMBER;
         NumberValue* num = (NumberValue*)malloc(sizeof(NumberValue));
@@ -1335,7 +1398,6 @@ Object* createObject(TokenType type,  const char* literal){
     }
 
     // Boolean 타입 판별
-    // if (strcmp(literal, "true") == 0) {
     if (type == TRUE){
         object->type = TRUE;
         BoolValue* boolVal = (BoolValue*)malloc(sizeof(BoolValue));
@@ -1343,7 +1405,6 @@ Object* createObject(TokenType type,  const char* literal){
         object->value = boolVal;
         return object;
     }
-    // if (strcmp(literal, "false") == 0) {
     if (type == FALSE){
         object->type = FALSE;
         BoolValue* boolVal = (BoolValue*)malloc(sizeof(BoolValue));
@@ -1353,7 +1414,6 @@ Object* createObject(TokenType type,  const char* literal){
     }
 
     // Nil 타입 판별
-    // if (strcmp(literal, "nil") == 0) {
     if (type == NIL){
         object->type = NIL;
         object->value = NULL;
@@ -1365,176 +1425,6 @@ Object* createObject(TokenType type,  const char* literal){
         StringValue* str = (StringValue*)malloc(sizeof(StringValue));
         str->string = strdup(literal); // 문자열 복사
         object->value = str;
-    }
-
-
-    return object;
-};
-
-
-
-Token* toToken(char *c){
-    char *now = c;
-    size_t char_size = strlen(c);
-
-    TokenType now_type;
-    char now_lexeme[MAX_TOKEN_LEXEME_SIZE] = "";
-    char now_literal[MAX_TOKEN_LITERAL_SIZE] = "";
-    int line = 1;
-
-    int has_error = 0;
-
-    for (int i = 0; i < char_size; i++){
-        switch (*now) {
-            case '(':
-                return createToken(LEFT_PAREN, "(", "\0", line);
-            case ')':
-                return createToken(RIGHT_PAREN, ")", "\0", line);
-            case '{':
-                return createToken(LEFT_BRACE, "{", "\0", line);
-            case '}':
-                return createToken(RIGHT_BRACE, "}", "\0", line);
-            case '*':
-                return createToken(STAR, "*", "\0", line);
-            case '.':
-                return createToken(DOT, ".", "\0", line);
-            case ',':
-                return createToken(COMMA, ",", "\0", line);
-            case '+':
-                return createToken(PLUS, "+", "\0", line);
-            case '-':
-                return createToken(MINUS, "-", "\0", line);
-            case '=':
-                if (*(now + 1) == '='){
-                    return createToken(EQUAL_EQUAL, "==", "\0", line);
-                } else{
-                    return createToken(EQUAL, "=", "\0", line);
-                }
-            case '!':
-                if (*(now + 1) == '='){
-                        return createToken(BANG_EQUAL, "!=", "\0", line);
-                } else{
-                    return createToken(BANG, "!", "\0", line);
-                }
-            case '<':
-                if (*(now + 1) == '='){
-                    return createToken(LESS_EQUAL, "<=", "\0", line);
-                } else{
-                    return createToken(LESS, "<", "\0", line);
-                }
-                break; 
-            case '>':
-                if (*(now + 1) == '='){
-                        return createToken(GREATER_EQUAL, ">=", "\0", line);
-                } else{
-                    return createToken(GREATER, ">", "\0", line);
-                }
-                break; 
-            case '/':
-                if (*(now + 1) == '/'){
-                    while ((*(now) != '\n') && (i < char_size)){
-                        now++;
-                        i++;
-                    }
-                    if (*(now) == '\n') line++;
-                    now++;
-                    continue;
-                } else{
-                    return createToken(SLASH, "/", "\0", line);
-                    break; 
-                }
-            case '\t':
-                now++;
-                continue;
-            case ' ':
-                now++;
-                continue;
-            case ';':
-                return createToken(SEMICOLON, ";", "\0", line);
-                break;
-            case '\n':
-                line++;
-                now++;
-                continue;
-            case '"':
-                int start = i;
-                int end = -1;
-                while ((*(now+1) != '"')){
-                    if (i >= char_size){
-                        has_error = 1;
-                        fprintf(stderr, "[line %d] Error: Unterminated string.\n", line);
-                        break;
-                    }
-                    now++;
-                    i++;
-                }
-                if (has_error) continue;
-                now++;
-                i++;
-
-                end = i;
-                int lexeme_length = end - start + 1;
-                now_type = STRING;
-
-                strncpy(now_lexeme, c + start, lexeme_length);
-                now_lexeme[lexeme_length] = '\0';
-
-                int literal_length = end - start - 1;
-                strncpy(now_literal, c + start + 1, literal_length);
-                now_literal[literal_length] = '\0';
-
-                return createToken(STRING, now_lexeme, now_literal, line);
-            default:
-                if (isDigit(*now)){
-                    int start = i;
-                    int end = -1;
-                    while ((isDigit(*(now+1)) || *(now+1) == '.')){
-                        now++;
-                        i++;
-                    }                    
-                    end = i;
-
-                    int lexeme_length = end - start + 1;
-                    strncpy(now_lexeme, c + start, lexeme_length);
-                    now_lexeme[lexeme_length] = '\0';
-                    copyStr(now_literal, "\0"); 
-
-                    now_type = NUMBER;
-                    if (isIn(now_lexeme, '.')){
-                        strncpy(now_literal, c + start, lexeme_length);
-                        trimTrailingZeros(now_literal);
-                    } else {
-                        int literal_length = end - start + 1 + 2;
-                        strncpy(now_literal, c + start, literal_length);
-                        now_literal[literal_length-2] = '.';
-                        now_literal[literal_length-1] = '0';
-                        now_literal[literal_length] = '\0';
-                    }
-                    return createToken(NUMBER, now_lexeme, now_literal, line);
-                } else if (isAlpha(*now)){
-                    int start = i;
-                    int end = -1;
-                    while (isAlphaNumeric(*(now + 1))){
-                        now++;
-                        i++;
-                    }
-                    end = i;
-                    int lexeme_length = end - start + 1;
-                    strncpy(now_lexeme, c + start, lexeme_length);
-                    now_lexeme[lexeme_length] = '\0';
-                    
-                    if (getReservedToken(now_lexeme) != INVALID_TOKEN){
-                        now_type = getReservedToken(now_lexeme); 
-                    } else {
-                        now_type = IDENTIFIER;
-                    }
-                    return createToken(now_type, now_lexeme, "\0", line);
-                }
-                fprintf(stderr, "[line %d] Error: Unexpected character: %c\n", line, *now);
-                now++;
-                has_error = 1;
-                continue; 
-        }
-        now++;
+        return object;
     }
 }
