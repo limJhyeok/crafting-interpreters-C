@@ -412,7 +412,7 @@ int main(int argc, char *argv[]) {
 
             AstPrinter *printer = newAstPrinter();
             char *output;
-            
+
             for (int i = 0; i < statements->count; i++){
                 Expr* expr;
                 Element* elem = getElement(statements, i);
@@ -1433,6 +1433,7 @@ Parser* createParser() {
 ParseError* createParseError() {
     ParseError* parse_error = (ParseError*)malloc(sizeof(ParseError));
     if (parse_error){
+        exit(65);
         // TODO
     }
     return parse_error;
