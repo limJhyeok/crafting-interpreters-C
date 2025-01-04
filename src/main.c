@@ -1370,18 +1370,18 @@ Stmt* statement(Parser* self){
 Stmt* printStatement(Parser* self){
     Expr* value = expression(self);
     consume(self, SEMICOLON, "Expect ';' after value.");
-    // if (had_error){
-        // exit(65);
-    // }
+    if (had_error){
+        exit(70);
+    }
     return (Stmt*)createPrintStmt(value); 
 }
 
 Stmt* expressionStatement(Parser *self){
     Expr* expr = expression(self);
     consume(self, SEMICOLON, "Expect ';' after expression.");
-    // if (had_error){
-        // exit(65);
-    // }
+    if (had_error){
+        exit(70);
+    }
     return (Stmt*)createExpressionStmt(expr);
 }
 
