@@ -1656,6 +1656,11 @@ void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt){
     size_t offset = offsetof(Interpreter, stmt_visitor);
 
     Object* value = evaluate((Interpreter*)((char*)self - offset), expr_stmt->expression);
+    if (runtime_error_flag){
+        RuntimeError* runtime_error = (RuntimeError*)value;
+        fprintf(stderr, "%s\n [line %d ]", runtime_error->message, runtime_error->token.line);
+        exit(70);
+    }
     // printf("%s\n", stringify(*value));
 
     return NULL;
@@ -1667,6 +1672,11 @@ void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt){
 
     size_t offset = offsetof(Interpreter, stmt_visitor);
     Object* value = evaluate((Interpreter*)((char*)self - offset), print_stmt->expression); 
+    if (runtime_error_flag){
+        RuntimeError* runtime_error = (RuntimeError*)value;
+        fprintf(stderr, "%s\n [line %d ]", runtime_error->message, runtime_error->token.line);
+        exit(70);
+    }
     printf("%s\n", stringify(*value));
     return NULL;
 }

@@ -1,1 +1,1 @@
-print false != false;
+"hello" < true
