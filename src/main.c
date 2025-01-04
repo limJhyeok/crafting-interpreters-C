@@ -442,7 +442,7 @@ int main(int argc, char *argv[]) {
             if (had_error){
                 free(parser);
                 free(statements);
-                exit(65);
+                exit(70);
             }
 
             Interpreter* interpreter = createInterpreter();
