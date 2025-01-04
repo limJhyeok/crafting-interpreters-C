@@ -441,7 +441,7 @@ int main(int argc, char *argv[]) {
             if (had_error){
                 free(parser);
                 free(statements);
-                exit(70);
+                exit(65);
             }
 
             Interpreter* interpreter = createInterpreter();
@@ -1321,7 +1321,7 @@ Stmt* printStatement(Parser* self){
 
 Stmt* expressionStatement(Parser *self){
     Expr* expr = expression(self);
-    consume(self, SEMICOLON, "Expect ';' after expression.");
+    // consume(self, SEMICOLON, "Expect ';' after expression.");
     return (Stmt*)createExpressionStmt(expr);
 }
 
@@ -1368,7 +1368,7 @@ Array* parse(Parser* self){
             element.type = EXPRESSION_STMT;
             element.data.expr_stmt = (Expression*)stmt;
         } else {
-            fprintf(stderr, "Error: Unknow statements");
+            fprintf(stderr, "Error: Unknown statements");
             exit(70);
         }
         addElement(stmt_array, element);
@@ -1453,7 +1453,7 @@ void* ExprLiteralAccept(Expr *self, Visitor *visitor){
 }
 
 void report(int line, char* where, char* message){
-    // printf("[line %d] Error %s: %s\n", line, where, message);
+    printf("[line %d] Error %s: %s\n", line, where, message);
     had_error = 1;
 }
 
