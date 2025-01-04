@@ -5,7 +5,7 @@
         "label": "Build with your_program.sh",
         "type": "shell",
         "command": "./your_program.sh",
-        "args": ["evaluate", "test.lox"],
+        "args": ["parse", "test.lox"],
         "group": {
           "kind": "build",
           "isDefault": true

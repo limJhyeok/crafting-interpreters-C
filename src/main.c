@@ -1222,7 +1222,7 @@ Expr* primary(Parser *self){
         return (Expr *)expr_grouping;
     }
     if (match(self, (TokenType[]){IDENTIFIER}, 1)){
-        exit(70);
+        exit(65);
     }
 
     had_error = 1;
