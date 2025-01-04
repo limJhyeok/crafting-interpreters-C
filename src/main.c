@@ -908,6 +908,8 @@ TokenType isEqual(Object* left, Object* right){
         double right_value = (((NumberValue*)right->value)->number);
         return left_value == right_value ? TRUE: FALSE;   
     }
+    if (left->type == TRUE && right->type == TRUE) return TRUE;
+    if (left->type == FALSE && right->type == FALSE) return TRUE;
 }
 
 void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
