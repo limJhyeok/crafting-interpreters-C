@@ -1269,7 +1269,7 @@ Expr* primary(Parser *self){
     }
 
     had_error = 1;
-    // self->parserError(self, peek(self), "Expect expression.");
+    self->parserError(self, peek(self), "Expect expression.");
 }
 
 Expr* unary(Parser *self){
