@@ -1269,7 +1269,7 @@ Expr* primary(Parser *self){
     }
 
     had_error = 1;
-    self->parserError(self, peek(self), "Expect expression.");
+    // self->parserError(self, peek(self), "Expect expression.");
 }
 
 Expr* unary(Parser *self){
@@ -1359,7 +1359,6 @@ Stmt* statement(Parser* self){
 
 Stmt* printStatement(Parser* self){
     Expr* value = expression(self);
-    // TODO: 이거 맞아?
     consume(self, SEMICOLON, "Expect ';' after value.");
     return (Stmt*)createPrintStmt(value); 
 }
