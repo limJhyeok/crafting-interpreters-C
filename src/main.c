@@ -989,9 +989,11 @@ void interpret(struct Interpreter* self, Array* statements){
             printf("%s\n", current_exception.message);
             exit(current_exception.code);
         }
-
-        if (runtime_error_flag){
+        if (had_error){
             exit(65);
+        }
+        if (runtime_error_flag){
+            exit(70);
         }
     }
 
