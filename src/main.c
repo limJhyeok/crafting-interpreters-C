@@ -991,7 +991,7 @@ void interpret(struct Interpreter* self, Array* statements){
         }
 
         if (runtime_error_flag){
-            exit(70);
+            exit(65);
         }
     }
 
@@ -1600,7 +1600,6 @@ void addElement(Array* array, Element element) {
         array->capacity *= 2;
         array->elements = realloc(array->elements, sizeof(Element) * array->capacity);
     }
-    // 새 요소 복사
     array->elements[array->count++] = element;
 }
 
