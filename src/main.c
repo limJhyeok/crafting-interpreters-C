@@ -1351,16 +1351,13 @@ Stmt* statement(Parser* self){
 
 Stmt* printStatement(Parser* self){
     Expr* value = expression(self);
-    char* error_message = "Expect ';' after value.";
-    consume(self, SEMICOLON, "");
+    consume(self, SEMICOLON, "Expect ';' after value.");
     return (Stmt*)createPrintStmt(value); 
 }
 
 Stmt* expressionStatement(Parser *self){
     Expr* expr = expression(self);
-    char* error_message = "Expect ';' after expression.";
-
-    consume(self, SEMICOLON, "");
+    consume(self, SEMICOLON, "Expect ';' after expression.");
     return (Stmt*)createExpressionStmt(expr);
 }
 
@@ -1489,7 +1486,7 @@ void* ExprLiteralAccept(Expr *self, Visitor *visitor){
 }
 
 void report(int line, char* where, char* message){
-    printf("[line %d] Error %s: %s\n", line, where, message);
+    // printf("[line %d] Error %s: %s\n", line, where, message);
     // had_error = 1;
 }
 
