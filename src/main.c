@@ -494,7 +494,7 @@ int main(int argc, char *argv[]) {
 
             if (has_error){
                 releaseTokenList();
-                exit(65);
+                exit(70);
             } 
 
             Parser* parser = createParser();
@@ -504,19 +504,11 @@ int main(int argc, char *argv[]) {
             if (had_error){
                 free(parser);
                 free(statements);
-                exit(65);
+                exit(70);
             }
 
             Interpreter* interpreter = createInterpreter();
             interpreter->interpret(interpreter, statements);
-
-            if (runtime_error_flag){
-                free(statements);
-                free(parser);
-                free(interpreter);
-                releaseTokenList();
-                exit(70);
-            }            
 
             free(statements);
             free(parser);
