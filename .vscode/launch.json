@@ -6,7 +6,7 @@
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}/build/interpreter",
-        "args": ["run", "test.lox"],
+        "args": ["evaluate", "test.lox"],
         "stopAtEntry": false,
         "cwd": "${workspaceFolder}",
         "environment": [

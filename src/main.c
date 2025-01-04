@@ -335,6 +335,7 @@ typedef struct Interpreter {
     Object* (*evaluate)(struct Interpreter* self, Expr* expr);
     void (*execute)(struct Interpreter* self, Stmt* stmt);
     void (*interpret)(struct Interpreter* self, Array* array);
+    void (*interpretExpr)(struct Interpreter* self, Expr* expr);
 } Interpreter;
 
 typedef struct RuntimeError {
@@ -354,6 +355,7 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr);
 Object* evaluate(struct Interpreter* self, Expr* expr);
 void execute(struct Interpreter* self, Stmt* stmt);
 void interpret(struct Interpreter* self, Array* statements);
+void interpretExpr(struct Interpreter* self, Expr* expr);
 char* stringify(Object object);
 
 int endsWith(char *c, size_t c_size, char *end, size_t end_size);
@@ -476,8 +478,18 @@ int main(int argc, char *argv[]) {
                 exit(65);
             }
 
+            runtime_error_flag = 0;
             Interpreter* interpreter = createInterpreter();
-            interpreter->interpret(interpreter, statements);
+            for (int i = 0; i < statements->count; i++){
+                Expr* expr;
+                Element* elem = getElement(statements, i);
+                if (elem->type == PRINT_STMT){
+                    expr = elem->data.print_stmt->expression;
+                } else if (elem->type == EXPRESSION_STMT){
+                    expr = elem->data.expr_stmt->expression;
+                }
+                interpreter->interpretExpr(interpreter, expr);
+            }
 
             free(parser);
             releaseArray(statements);
@@ -507,6 +519,7 @@ int main(int argc, char *argv[]) {
                 exit(65);
             }
 
+            runtime_error_flag = 0;
             Interpreter* interpreter = createInterpreter();
             interpreter->interpret(interpreter, statements);
 
@@ -980,12 +993,24 @@ void interpret(struct Interpreter* self, Array* statements){
             stmt = (Stmt*)element->data.expr_stmt;
         }
         execute(self, stmt);
+        // TODO: evaluate일 때는 다르게 해야함
         if (runtime_error_flag){
             exit(70);
         }
     }
 
 }
+
+void interpretExpr(struct Interpreter* self, Expr* expr){
+    Object* object = evaluate(self, expr);
+    if (runtime_error_flag){
+        RuntimeError* runtime_error = (RuntimeError*)object;
+        fprintf(stderr, "%s\n [line %d ]", runtime_error->message, runtime_error->token.line);
+        exit(70);
+    } else {
+        printf("%s\n", stringify(*object));
+    }
+};
 
 char* stringify(Object object){
     if (object.value == NULL) return "nil";
@@ -1578,6 +1603,7 @@ Interpreter *createInterpreter(){
     interpreter->evaluate = evaluate;
     interpreter->execute = execute;
     interpreter->interpret = interpret;
+    interpreter->interpretExpr = interpretExpr;
     return interpreter;
 }
 
