@@ -2,12 +2,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <malloc.h>
+#include <stddef.h> // offsetof
 
 #define N_RESERVED_WORD 16
 #define MAX_LEN_RESERVED_WORD 10
 #define MAX_TOKEN_LEXEME_SIZE 20
 #define MAX_TOKEN_LITERAL_SIZE 100
+#define INITIAL_LIST_SIZE 2
 
+// Token - start
 
 typedef enum TokenType {
     // Single-character tokens.
@@ -61,13 +64,35 @@ typedef struct Token {
     struct Token *next;
 } Token;
 
-// typedef enum {
-//     OBJ_NUMBER,
-//     OBJ_STRING,
-//     OBJ_BOOL,
-//     OBJ_NIL,
-//     OBJ_UNKNOWN
-// } ObjectType;
+
+void initTokenList();
+int isEmptyList();
+int releaseTokenList();
+Token* createToken(TokenType type, char *lexeme, char *literal, int line);
+int insertAtTail(TokenType type, char *lexeme, char *literal, int line);
+int getSize();
+void printToken(const Token *token);
+void printTokenList();
+
+int copyStr(char *dest, char *src);
+
+char *read_file_contents(const char *filename);
+
+int scanning(const char *file_contents);
+
+int isDigit(const char c);
+int isAlpha(const char c);
+int isAlphaNumeric(const char c);
+
+int isIn(const char *str, const char c);
+
+void trimTrailingZeros(char *str);
+
+TokenType getReservedToken(const char *c);
+
+// Token - end
+
+// Object - start
 
 typedef struct Object{
     TokenType type;
@@ -89,6 +114,9 @@ typedef struct {
 
 Object* createObject(TokenType type, const char* literal);
 
+// Object - end
+
+// Expression - start
 struct Visitor;
 
 typedef struct Expr
@@ -131,62 +159,6 @@ typedef struct ExprLiteral
     char *value;
 } ExprLiteral;
 
-typedef struct ParseError{
-} ParseError;
-
-ParseError* createParseError();
-
-typedef struct Parser {
-    Token* current;
-    Token* (*peek)(struct Parser*);
-    int (*isAtEnd)(struct Parser*);
-    Token* (*previous)(struct Parser*);
-    Token* (*advance)(struct Parser*);
-    int (*check)(struct Parser*, TokenType);
-    int (*match)(struct Parser*, TokenType*, size_t num_types);
-    Expr* (*primary)(struct Parser*);
-    Expr* (*unary)(struct Parser*);
-    Expr* (*factor)(struct Parser*);
-    Expr* (*term)(struct Parser*);
-    Expr* (*comparison)(struct Parser*);
-    Expr* (*equality)(struct Parser*);
-    Expr* (*expression)(struct Parser*);
-    ParseError* (*parserError)(struct Parser*, Token*, char*);
-    void (*synchronize)(struct Parser*);
-    Expr* (*parse)(struct Parser*);
-} Parser;
-
-Token *g_head_pointer;
-Token *g_tail_pointer;
-int g_token_list_size = 0;
-
-Token* peek(Parser* self);
-int isAtEnd(Parser* self);
-Token* previous(Parser* self);
-Token* advance(Parser* self);
-int check(Parser* self, TokenType type);
-int match(Parser *self, TokenType* types, size_t num_types);
-
-Expr* primary(Parser *self);
-Expr* unary(Parser *self);
-Expr* factor(Parser *self);
-Expr* term(Parser* self);
-Expr* comparison(Parser* self);
-Expr* equality(Parser *self);
-Expr* expression(Parser* self);
-ParseError* parserError(Parser* self,Token* token, char* message);
-void *synchronize(Parser* self);
-Expr* parse(Parser* self);
-
-
-Token* consume(Parser* self, TokenType type, char* message);
-
-Parser* createParser();
-
-int had_error = 0;
-void report(int line, char* where, char* message);
-void error(Token* token, char* message);    
-
 void* ExprBinaryAccept(Expr *self, Visitor *visitor);
 void* ExprUnaryAccept(Expr *self, Visitor *visitor);
 void* ExprGroupingAccept(Expr *self, Visitor *visitor);
@@ -207,10 +179,142 @@ void *AstPrinterVisitLiteralExpr(Visitor *self, Expr *expr);
 char *print(Visitor *self, Expr *expr);
 AstPrinter *newAstPrinter();
 
+// Expression - end
+
+// Statement - start
+struct StmtVisitor;
+
+typedef struct Stmt{
+    void* (*accept)(struct Stmt *self, struct StmtVisitor *visitor);
+} Stmt;
+
+typedef struct Print {
+    Stmt base;
+    Expr* expression;
+} Print;
+
+typedef struct Expression {
+    Stmt base;
+    Expr* expression;
+} Expression;
+
+typedef struct StmtVisitor{
+    void* (*visitExpressionStmt)(struct StmtVisitor* self, Stmt* stmt);
+    void* (*visitPrintStmt)(struct StmtVisitor* self, Stmt* stmt);
+} StmtVisitor;
+
+// Statement - end
+
+void* PrintStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
+void* ExpressionStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
+
+Print* createPrintStmt(Expr* expression);
+Expression* createExpressionStmt(Expr* expressoin);
+
+void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt);
+void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt);
+
+typedef enum {
+    PRINT_STMT,
+    EXPRESSION_STMT
+} ElementType;
+
+typedef struct Element {
+    ElementType type;
+    union {
+        Print* print_stmt;
+        Expression* expr_stmt;
+    } data;
+} Element;
+
+typedef struct Array {
+    Element* elements;        // 실제 데이터를 저장하는 배열
+    size_t element_size; // 각 요소의 크기
+    size_t count;        // 배열에 저장된 요소의 개수
+    size_t capacity;    // 배열의 용량
+} Array;
+
+
+// TODO: Array에 서로 다른 element 저장하게 만들기
+
+Array* createArray(size_t elementSize, size_t initialCapacity);
+void addElement(Array* array, Element element); 
+void* getElement(Array* array, size_t index);
+void releaseArray(Array* array);
+
+// Parser - start
+
+typedef struct ParseError{
+} ParseError;
+
+ParseError* createParseError();
+
+typedef struct Parser {
+    Token* current;
+    Token* (*peek)(struct Parser*);
+    int (*isAtEnd)(struct Parser*);
+    Token* (*previous)(struct Parser*);
+    Token* (*advance)(struct Parser*);
+    int (*check)(struct Parser*, TokenType);
+    int (*match)(struct Parser*, TokenType*, size_t num_types);
+    Expr* (*primary)(struct Parser*);
+    Expr* (*unary)(struct Parser*);
+    Expr* (*factor)(struct Parser*);
+    Expr* (*term)(struct Parser*);
+    Expr* (*comparison)(struct Parser*);
+    Expr* (*equality)(struct Parser*);
+    Expr* (*expression)(struct Parser*);
+    Stmt* (*statement)(struct Parser*);
+    Stmt* (*printStatement)(struct Parser*);
+    Stmt* (*expressionStatement)(struct Parser*);
+    ParseError* (*parserError)(struct Parser*, Token*, char*);
+    void (*synchronize)(struct Parser*);
+    Array* (*parse)(struct Parser*);
+} Parser;
+
+Token* peek(Parser* self);
+int isAtEnd(Parser* self);
+Token* previous(Parser* self);
+Token* advance(Parser* self);
+int check(Parser* self, TokenType type);
+int match(Parser *self, TokenType* types, size_t num_types);
+
+Expr* primary(Parser *self);
+Expr* unary(Parser *self);
+Expr* factor(Parser *self);
+Expr* term(Parser* self);
+Expr* comparison(Parser* self);
+Expr* equality(Parser *self);
+Expr* expression(Parser* self);
+Stmt* statement(Parser* self);
+Stmt* printStatement(Parser* self);
+Stmt* expressionStatement(Parser* self);
+ParseError* parserError(Parser* self,Token* token, char* message);
+void *synchronize(Parser* self);
+Array* parse(Parser* self);
+
+Token* consume(Parser* self, TokenType type, char* message);
+
+Parser* createParser();
+
+// Parser - end
+
+Token *g_head_pointer;
+Token *g_tail_pointer;
+int g_token_list_size = 0;
+
+int had_error = 0;
+void report(int line, char* where, char* message);
+void error(Token* token, char* message);    
+
+// Interpreter - start
+
 typedef struct Interpreter {
     Visitor base;
+    StmtVisitor stmt_visitor;
     Object* (*evaluate)(struct Interpreter* self, Expr* expr);
-    void (*interpret)(struct Interpreter*, Expr*);
+    void (*execute)(struct Interpreter* self, Stmt* stmt);
+    void (*interpret)(struct Interpreter* self, Array* array);
 } Interpreter;
 
 typedef struct RuntimeError {
@@ -228,7 +332,8 @@ void* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr);
 Object* evaluate(struct Interpreter* self, Expr* expr);
-void interpret(struct Interpreter* self, Expr* expr);
+void execute(struct Interpreter* self, Stmt* stmt);
+void interpret(struct Interpreter* self, Array* statements);
 char* stringify(Object object);
 
 int endsWith(char *c, size_t c_size, char *end, size_t end_size);
@@ -249,31 +354,7 @@ int isLess(double left, double right);
 int isLessEqual(double left, double right);
 Object* relationalOperation(Object* left, Object* right, int (*comparison)(double, double));
 
-
-void initTokenList();
-int isEmptyList();
-int releaseTokenList();
-Token* createToken(TokenType type, char *lexeme, char *literal, int line);
-int insertAtTail(TokenType type, char *lexeme, char *literal, int line);
-int getSize();
-void printToken(const Token *token);
-void printTokenList();
-
-int copyStr(char *dest, char *src);
-
-char *read_file_contents(const char *filename);
-
-int scanning(const char *file_contents);
-
-int isDigit(const char c);
-int isAlpha(const char c);
-int isAlphaNumeric(const char c);
-
-int isIn(const char *str, const char c);
-
-void trimTrailingZeros(char *str);
-
-TokenType getReservedToken(const char *c);
+// Interpreter - end
 
 int main(int argc, char *argv[]) {
     // Disable output buffering
@@ -322,21 +403,21 @@ int main(int argc, char *argv[]) {
 
             Parser* parser = createParser();
 
-            Expr* expression = parser->parse(parser);
+            Array* statements = parser->parse(parser);
 
             if (had_error){
                 free(parser);
-                free(expression);
+                releaseArray(statements);
                 exit(65);
             }
 
-            AstPrinter *printer = newAstPrinter();
-            char *output = printer->print((Visitor *)printer, expression);
+            // AstPrinter *printer = newAstPrinter();
+            // char *output = printer->print((Visitor *)printer, statements);
 
-            printf("%s\n", output);
+            // printf("%s\n", output);
 
-            free(printer);
-            free(expression);
+            // free(printer);
+            releaseArray(statements);
             free(parser);
             releaseTokenList();
         }
@@ -356,18 +437,18 @@ int main(int argc, char *argv[]) {
 
             Parser* parser = createParser();
 
-            Expr* expression = parser->parse(parser);
+            Array* statements = parser->parse(parser);
 
             if (had_error){
                 free(parser);
-                free(expression);
+                free(statements);
                 exit(65);
             }
 
             Interpreter* interpreter = createInterpreter();
-            interpreter->interpret(interpreter, expression);
+            interpreter->interpret(interpreter, statements);
 
-            free(expression);
+            free(statements);
             free(parser);
             free(interpreter);
             releaseTokenList();
@@ -630,6 +711,10 @@ Object* evaluate(struct Interpreter* self, Expr* expr){
     return (Object*)expr->accept(expr, &self->base);
 }
 
+void execute(Interpreter* self, Stmt* stmt){
+    stmt->accept(stmt, &self->stmt_visitor);
+}
+
 void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
     ExprUnary* expr_unary = (ExprUnary*)expr;
 
@@ -820,15 +905,30 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
     }
 }
 
-void interpret(struct Interpreter* self, Expr* expr){
-    Object* object = evaluate(self, expr);
-    if (runtime_error_flag){
-        RuntimeError* runtime_error = (RuntimeError*)object;
-        fprintf(stderr, "%s\n [line %d ]", runtime_error->message, runtime_error->token.line);
-        exit(70);
-    } else {
-        printf("%s\n", stringify(*object));
+void interpret(struct Interpreter* self, Array* statements){
+    for (int i = 0; i < statements->count; i++){
+        Element* element = getElement(statements, i);
+        Stmt* stmt;
+        if (element->type == PRINT_STMT){
+            stmt = (Stmt*)element->data.print_stmt;
+        } else if (element->type == EXPRESSION_STMT) {
+            stmt = (Stmt*)element->data.expr_stmt;
+        }
+        execute(self, stmt);
     }
+    if (runtime_error_flag){
+        // RuntimeError* runtime_error = (RuntimeError*)object;
+        // fprintf(stderr, "%s\n [line %d ]", runtime_error->message, runtime_error->token.line);
+        exit(70);
+    }
+    // Object* object = evaluate(self, statements);
+    // if (runtime_error_flag){
+    //     RuntimeError* runtime_error = (RuntimeError*)object;
+    //     fprintf(stderr, "%s\n [line %d ]", runtime_error->message, runtime_error->token.line);
+    //     exit(70);
+    // } else {
+    //     printf("%s\n", stringify(*object));
+    // }
 }
 
 char* stringify(Object object){
@@ -1187,6 +1287,24 @@ Expr* expression(Parser* self){
     return equality(self);
 }
 
+Stmt* statement(Parser* self){
+    if (match(self, (TokenType[]){PRINT}, 1)) return printStatement(self);
+
+    return expressionStatement(self);
+}
+
+Stmt* printStatement(Parser* self){
+    Expr* value = expression(self);
+    consume(self, SEMICOLON, "Expect ';' after value.");
+    return (Stmt*)createPrintStmt(value); 
+}
+
+Stmt* expressionStatement(Parser *self){
+    Expr* expr = expression(self);
+    consume(self, SEMICOLON, "Expect ';' after expression.");
+    return (Stmt*)createExpressionStmt(expr);
+}
+
 ParseError* parserError(Parser* self,Token* token, char* message){
     error(token, message);
     return createParseError();
@@ -1213,13 +1331,37 @@ void *synchronize(Parser* self){
     }
 }
 
-Expr* parse(Parser* self){
-    had_error = 0;
-    Expr* result =  expression(self);
-    if (had_error){
-        return NULL;
+Array* parse(Parser* self){
+    Array* stmt_array = createArray(sizeof(Stmt), INITIAL_LIST_SIZE);
+    if (!stmt_array){
+        fprintf(stderr, "Error: Initial memory allocation of Stmt list failed\n");
+        exit(70);
     }
-    return result;
+    while (!isAtEnd(self)) {
+        Stmt* stmt = statement(self);
+        
+        Element element;
+        if (stmt->accept == PrintStmtAccept){
+            element.type = PRINT_STMT;
+            element.data.print_stmt = (Print*)stmt;
+        } else if (stmt->accept == ExpressionStmtAccept){
+            element.type = EXPRESSION_STMT;
+            element.data.expr_stmt = (Expression*)stmt;
+        } else {
+            fprintf(stderr, "Error: Unknow statements");
+            exit(70);
+        }
+        addElement(stmt_array, element);
+    }
+
+    return stmt_array;
+
+    // had_error = 0;
+    // Expr* result =  expression(self);
+    // if (had_error){
+    //     return NULL;
+    // }
+    // return result;
 }
 
 
@@ -1229,7 +1371,6 @@ Token* consume(Parser* self, TokenType type, char* message){
     self->parserError(self, peek(self), message);
     return NULL;
 }
-
 
 
 Parser* createParser() {
@@ -1250,6 +1391,7 @@ Parser* createParser() {
         parser->comparison = comparison;
         parser->equality = equality;
         parser->expression = expression;
+        parser->statement = statement;
         parser->parserError = parserError;
         parser->parse = parse;
     }
@@ -1378,10 +1520,99 @@ Interpreter *createInterpreter(){
     interpreter->base.visitGroupingExpr = InterpreterVisitGroupingExpr;
     interpreter->base.visitBinaryExpr = InterpreterVisitBinaryExpr;
     interpreter->base.visitUnaryExpr = InterpreterVisitUnaryExpr;
+    interpreter->stmt_visitor.visitExpressionStmt = InterpreterVisitExpressionStmt;
+    interpreter->stmt_visitor.visitPrintStmt = InterpreterVisitPrintStmt;
     interpreter->evaluate = evaluate;
+    interpreter->execute = execute;
     interpreter->interpret = interpret;
     return interpreter;
 }
+
+Array* createArray(size_t elementSize, size_t initialCapacity) {
+    Array* array = (Array*)malloc(sizeof(Array));
+    array->element_size = elementSize;
+    array->count = 0;
+    array->capacity = initialCapacity;
+    array->elements = (Element*)malloc(sizeof(Element) * initialCapacity);
+    return array;
+}
+
+void addElement(Array* array, Element element) {
+    if (array->count >= array->capacity) {
+        // 용량 증가
+        array->capacity *= 2;
+        array->elements = realloc(array->elements, array->element_size * array->capacity);
+    }
+    // 새 요소 복사
+    array->elements[array->count++] = element;
+    // void* target = (char*)array->data + (array->count * array->element_size);
+    // memcpy(target, element, array->element_size);
+    // array->count++;
+}
+
+void* getElement(Array* array, size_t index) {
+    if (index >= array->count) {
+        fprintf(stderr, "Index out of bounds.\n");
+        return NULL;
+    }
+    return &array->elements[index];
+}
+
+void releaseArray(Array* array) {
+    free(array->elements);
+    free(array);
+}
+
+void* PrintStmtAccept(Stmt *self, StmtVisitor *stmt_visitor){
+    stmt_visitor->visitPrintStmt(stmt_visitor, self);
+};
+
+
+void* ExpressionStmtAccept(Stmt *self, StmtVisitor *stmt_visitor){
+    stmt_visitor->visitExpressionStmt(stmt_visitor, self);
+};
+
+
+Print* createPrintStmt(Expr* expr){
+    Print* print_stmt = (Print*)malloc(sizeof(Print));
+    if (!print_stmt){
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
+    // TODO: visitPrintStmt
+    print_stmt->base.accept = PrintStmtAccept;
+    print_stmt->expression = expr;
+    return print_stmt;
+}
+
+Expression* createExpressionStmt(Expr* expr){
+    Expression* expression_stmt = (Expression*)malloc(sizeof(Expression));
+    if (!expression_stmt){
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
+    expression_stmt->base.accept = ExpressionStmtAccept;
+    expression_stmt->expression = expr;
+    return expression_stmt;
+}
+
+void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt){
+    Expression* expr_stmt = (Expression*)stmt;
+    size_t offset = offsetof(Interpreter, stmt_visitor);
+
+    evaluate((Interpreter*)((char*)self - offset), expr_stmt->expression);
+    return NULL;
+};
+
+void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt){
+    Print* print_stmt = (Print*)stmt;
+
+    size_t offset = offsetof(Interpreter, stmt_visitor);
+    Object* value = evaluate((Interpreter*)((char*)self - offset), print_stmt->expression); 
+    printf(stringify(*value));
+    return NULL;
+}
+
 
 Object* createObject(TokenType type,  const char* literal){
     Object* object = (Object*)malloc(sizeof(Object));
