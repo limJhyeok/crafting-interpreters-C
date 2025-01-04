@@ -1359,6 +1359,7 @@ Stmt* statement(Parser* self){
 
 Stmt* printStatement(Parser* self){
     Expr* value = expression(self);
+    // TODO: 이거 맞아?
     consume(self, SEMICOLON, "Expect ';' after value.");
     return (Stmt*)createPrintStmt(value); 
 }
