@@ -1433,7 +1433,6 @@ Parser* createParser() {
 ParseError* createParseError() {
     ParseError* parse_error = (ParseError*)malloc(sizeof(ParseError));
     if (parse_error){
-        exit(65);
         // TODO
     }
     return parse_error;
