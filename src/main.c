@@ -431,7 +431,7 @@ int main(int argc, char *argv[]) {
 
             if (has_error){
                 releaseTokenList();
-                exit(65);
+                exit(70);
             } 
 
             Parser* parser = createParser();
@@ -441,7 +441,7 @@ int main(int argc, char *argv[]) {
             if (had_error){
                 free(parser);
                 free(statements);
-                exit(65);
+                exit(70);
             }
 
             Interpreter* interpreter = createInterpreter();
@@ -1220,9 +1220,8 @@ Expr* primary(Parser *self){
         expr_grouping->expression = expr;
         return (Expr *)expr_grouping;
     }
-    // TODO: ignore IDENTIFIER 
     if (match(self, (TokenType[]){IDENTIFIER}, 1)){
-        exit(65);
+        exit(70);
     }
 
     had_error = 1;
