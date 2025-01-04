@@ -1615,7 +1615,9 @@ void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt){
     Expression* expr_stmt = (Expression*)stmt;
     size_t offset = offsetof(Interpreter, stmt_visitor);
 
-    evaluate((Interpreter*)((char*)self - offset), expr_stmt->expression);
+    Object* value = evaluate((Interpreter*)((char*)self - offset), expr_stmt->expression);
+    printf("%s\n", stringify(*value));
+
     return NULL;
 };
 
