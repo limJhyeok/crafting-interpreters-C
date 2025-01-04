@@ -967,8 +967,9 @@ char* stringify(Object object){
     if (object.type == TRUE || object.type == FALSE) {
         return ((BoolValue*)object.value)->boolean != 0 ? "true" : "false";
     }
-    fprintf(stderr, "Unknown type error\n");
-    exit(EXIT_FAILURE);
+    exit(70);
+    // fprintf(stderr, "Unknown type error\n");
+    // exit(EXIT_FAILURE);
 }
 
 
