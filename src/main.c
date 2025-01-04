@@ -397,7 +397,7 @@ int main(int argc, char *argv[]) {
 
             if (has_error){
                 releaseTokenList();
-                exit(65);
+                exit(70);
             } 
 
             Parser* parser = createParser();
@@ -407,7 +407,7 @@ int main(int argc, char *argv[]) {
             if (had_error){
                 free(parser);
                 releaseArray(statements);
-                exit(65);
+                exit(70);
             }
 
             // AstPrinter *printer = newAstPrinter();
