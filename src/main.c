@@ -472,15 +472,15 @@ int main(int argc, char *argv[]) {
 
             if (had_error){
                 free(parser);
-                free(statements);
+                releaseArray(statements);
                 exit(65);
             }
 
             Interpreter* interpreter = createInterpreter();
             interpreter->interpret(interpreter, statements);
 
-            free(statements);
             free(parser);
+            releaseArray(statements);
             free(interpreter);
             releaseTokenList();
         }
@@ -501,23 +501,17 @@ int main(int argc, char *argv[]) {
 
             Array* statements = parser->parse(parser);
 
-            if (runtime_error_flag){
-                free(parser);
-                free(statements);
-                exit(70);
-            }
-
             if (had_error){
                 free(parser);
-                free(statements);
+                releaseArray(statements);
                 exit(65);
             }
 
             Interpreter* interpreter = createInterpreter();
             interpreter->interpret(interpreter, statements);
 
-            free(statements);
             free(parser);
+            releaseArray(statements);
             free(interpreter);
             releaseTokenList();
         }
@@ -809,14 +803,12 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
 RuntimeError* checkNumberOperand(Token operator, Object operand){
     if (operand.type == NUMBER) return NULL;
     runtime_error_flag = 1;
-    // throw_exception(65, "Operand must be a number.");
     return createRuntimeError(operator, "Operand must be a number.");
 }
 
 RuntimeError* checkNumberOperands(Token operator, Object left, Object right){
     if (left.type == NUMBER && right.type == NUMBER) return NULL;
     runtime_error_flag = 1;
-    // throw_exception(65, "Operands must be numbers.");
     return createRuntimeError(operator, "Operands must be numbers.");
 }
 
@@ -987,17 +979,7 @@ void interpret(struct Interpreter* self, Array* statements){
         } else if (element->type == EXPRESSION_STMT) {
             stmt = (Stmt*)element->data.expr_stmt;
         }
-        int error_code = setjmp(run_error_jmp);
-
-        if (error_code == 0){
-            execute(self, stmt);
-        } else{
-            printf("%s\n", current_exception.message);
-            exit(current_exception.code);
-        }
-        if (had_error){
-            exit(65);
-        }
+        execute(self, stmt);
         if (runtime_error_flag){
             exit(70);
         }
@@ -1279,7 +1261,7 @@ Expr* primary(Parser *self){
     }
 
     had_error = 1;
-    // self->parserError(self, peek(self), "Expect expression.");
+    self->parserError(self, peek(self), "Expect expression.");
 }
 
 Expr* unary(Parser *self){
@@ -1434,7 +1416,11 @@ Array* parse(Parser* self){
 
 Token* consume(Parser* self, TokenType type, char* message){
     if (check(self, type)) return advance(self);
-    had_error=1;
+    if (type == SEMICOLON){
+        runtime_error_flag = 1;
+    } else {
+        had_error = 1;
+    }
     self->parserError(self, peek(self), message);
     return NULL;
 }
@@ -1501,7 +1487,7 @@ void* ExprLiteralAccept(Expr *self, Visitor *visitor){
 
 void report(int line, char* where, char* message){
     printf("[line %d] Error %s: %s\n", line, where, message);
-    had_error = 1;
+    // had_error = 1;
 }
 
 void error(Token* token, char* message) {
