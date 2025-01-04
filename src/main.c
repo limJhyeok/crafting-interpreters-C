@@ -803,14 +803,14 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
 RuntimeError* checkNumberOperand(Token operator, Object operand){
     if (operand.type == NUMBER) return NULL;
     runtime_error_flag = 1;
-    throw_exception(65, "Operand must be a number.");
+    // throw_exception(65, "Operand must be a number.");
     return createRuntimeError(operator, "Operand must be a number.");
 }
 
 RuntimeError* checkNumberOperands(Token operator, Object left, Object right){
     if (left.type == NUMBER && right.type == NUMBER) return NULL;
     runtime_error_flag = 1;
-    throw_exception(65, "Operands must be numbers.");
+    // throw_exception(65, "Operands must be numbers.");
     return createRuntimeError(operator, "Operands must be numbers.");
 }
 
@@ -930,7 +930,7 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
             runtime_error_flag = 1;
             runtime_error = createRuntimeError(*expr_binary->operator,
                                              "Operands must be two numbers or two strings.");
-            throw_exception(70, "Operands must be two numbers or two strings.");
+            // throw_exception(70, "Operands must be two numbers or two strings.");
 
             return runtime_error;
         case SLASH:
