@@ -504,7 +504,7 @@ int main(int argc, char *argv[]) {
             if (had_error){
                 free(parser);
                 free(statements);
-                exit(70);
+                exit(65);
             }
 
             Interpreter* interpreter = createInterpreter();
