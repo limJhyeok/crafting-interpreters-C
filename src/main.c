@@ -1351,13 +1351,16 @@ Stmt* statement(Parser* self){
 
 Stmt* printStatement(Parser* self){
     Expr* value = expression(self);
-    consume(self, SEMICOLON, "Expect ';' after value.");
+    char* error_message = "Expect ';' after value.";
+    consume(self, SEMICOLON, "");
     return (Stmt*)createPrintStmt(value); 
 }
 
 Stmt* expressionStatement(Parser *self){
     Expr* expr = expression(self);
-    consume(self, SEMICOLON, "Expect ';' after expression.");
+    char* error_message = "Expect ';' after expression.";
+
+    consume(self, SEMICOLON, "");
     return (Stmt*)createExpressionStmt(expr);
 }
 
