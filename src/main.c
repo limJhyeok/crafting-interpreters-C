@@ -501,6 +501,12 @@ int main(int argc, char *argv[]) {
 
             Array* statements = parser->parse(parser);
 
+            if (runtime_error_flag){
+                free(parser);
+                free(statements);
+                exit(70);
+            }
+
             if (had_error){
                 free(parser);
                 free(statements);
@@ -1364,12 +1370,18 @@ Stmt* statement(Parser* self){
 Stmt* printStatement(Parser* self){
     Expr* value = expression(self);
     consume(self, SEMICOLON, "Expect ';' after value.");
+    if (had_error){
+        exit(65);
+    }
     return (Stmt*)createPrintStmt(value); 
 }
 
 Stmt* expressionStatement(Parser *self){
     Expr* expr = expression(self);
     consume(self, SEMICOLON, "Expect ';' after expression.");
+    if (had_error){
+        exit(65);
+    }
     return (Stmt*)createExpressionStmt(expr);
 }
 
@@ -1656,12 +1668,6 @@ void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt){
     size_t offset = offsetof(Interpreter, stmt_visitor);
 
     Object* value = evaluate((Interpreter*)((char*)self - offset), expr_stmt->expression);
-    if (runtime_error_flag){
-        RuntimeError* runtime_error = (RuntimeError*)value;
-        fprintf(stderr, "%s\n [line %d ]", runtime_error->message, runtime_error->token.line);
-        exit(70);
-    }
-    // printf("%s\n", stringify(*value));
 
     return NULL;
 };
@@ -1672,11 +1678,6 @@ void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt){
 
     size_t offset = offsetof(Interpreter, stmt_visitor);
     Object* value = evaluate((Interpreter*)((char*)self - offset), print_stmt->expression); 
-    if (runtime_error_flag){
-        RuntimeError* runtime_error = (RuntimeError*)value;
-        fprintf(stderr, "%s\n [line %d ]", runtime_error->message, runtime_error->token.line);
-        exit(70);
-    }
     printf("%s\n", stringify(*value));
     return NULL;
 }
