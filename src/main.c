@@ -456,6 +456,37 @@ int main(int argc, char *argv[]) {
 
         free(file_contents);
     }
+    else if (strcmp(command, "run") == 0){
+        char *file_contents = read_file_contents(argv[2]);
+        if (strlen(file_contents) > 0) {
+            int has_error = scanning(file_contents);
+
+            if (has_error){
+                releaseTokenList();
+                exit(65);
+            } 
+
+            Parser* parser = createParser();
+
+            Array* statements = parser->parse(parser);
+
+            if (had_error){
+                free(parser);
+                free(statements);
+                exit(65);
+            }
+
+            Interpreter* interpreter = createInterpreter();
+            interpreter->interpret(interpreter, statements);
+
+            free(statements);
+            free(parser);
+            free(interpreter);
+            releaseTokenList();
+        }
+
+        free(file_contents);
+    }
     else {
         fprintf(stderr, "Unknown command: %s\n", command);
         return 1;
