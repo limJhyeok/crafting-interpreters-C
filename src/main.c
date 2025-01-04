@@ -510,6 +510,14 @@ int main(int argc, char *argv[]) {
             Interpreter* interpreter = createInterpreter();
             interpreter->interpret(interpreter, statements);
 
+            if (runtime_error_flag){
+                free(statements);
+                free(parser);
+                free(interpreter);
+                releaseTokenList();
+                exit(70);
+            }            
+
             free(statements);
             free(parser);
             free(interpreter);
