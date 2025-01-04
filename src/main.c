@@ -442,7 +442,7 @@ int main(int argc, char *argv[]) {
             if (had_error){
                 free(parser);
                 free(statements);
-                exit(70);
+                exit(65);
             }
 
             Interpreter* interpreter = createInterpreter();
@@ -946,20 +946,11 @@ void interpret(struct Interpreter* self, Array* statements){
             stmt = (Stmt*)element->data.expr_stmt;
         }
         execute(self, stmt);
+        if (runtime_error_flag){
+            exit(70);
+        }
     }
-    if (runtime_error_flag){
-        // RuntimeError* runtime_error = (RuntimeError*)object;
-        // fprintf(stderr, "%s\n [line %d ]", runtime_error->message, runtime_error->token.line);
-        exit(70);
-    }
-    // Object* object = evaluate(self, statements);
-    // if (runtime_error_flag){
-    //     RuntimeError* runtime_error = (RuntimeError*)object;
-    //     fprintf(stderr, "%s\n [line %d ]", runtime_error->message, runtime_error->token.line);
-    //     exit(70);
-    // } else {
-    //     printf("%s\n", stringify(*object));
-    // }
+
 }
 
 char* stringify(Object object){
@@ -1640,7 +1631,7 @@ void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt){
 
     size_t offset = offsetof(Interpreter, stmt_visitor);
     Object* value = evaluate((Interpreter*)((char*)self - offset), print_stmt->expression); 
-    printf(stringify(*value));
+    printf("%s", stringify(*value));
     return NULL;
 }
 
