@@ -1,1 +1,1 @@
-"bar" < true;
+print "Hello, World!";

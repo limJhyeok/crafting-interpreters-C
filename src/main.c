@@ -1626,6 +1626,7 @@ void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt){
     return NULL;
 };
 
+
 void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt){
     Print* print_stmt = (Print*)stmt;
 
