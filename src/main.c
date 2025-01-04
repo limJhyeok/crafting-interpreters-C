@@ -3,12 +3,32 @@
 #include <string.h>
 #include <malloc.h>
 #include <stddef.h> // offsetof
+#include <setjmp.h> // error handling
 
 #define N_RESERVED_WORD 16
 #define MAX_LEN_RESERVED_WORD 10
 #define MAX_TOKEN_LEXEME_SIZE 20
 #define MAX_TOKEN_LITERAL_SIZE 100
 #define INITIAL_LIST_SIZE 2
+
+jmp_buf run_error_jmp;
+
+
+// Excpetion - start
+typedef struct {
+    int code;                 // 예외 코드
+    char message[256];        // 예외 메시지
+} Exception;
+// Exception - end
+
+Exception current_exception;
+
+void throw_exception(int code, const char *message) {
+    current_exception.code = code;           // 코드 설정
+    strncpy(current_exception.message, message, sizeof(current_exception.message) - 1);
+    current_exception.message[sizeof(current_exception.message) - 1] = '\0'; // null-terminate
+    longjmp(run_error_jmp, code);            // 예외 발생
+}
 
 // Token - start
 
@@ -180,6 +200,7 @@ char *print(Visitor *self, Expr *expr);
 AstPrinter *newAstPrinter();
 
 // Expression - end
+
 
 // Statement - start
 struct StmtVisitor;
@@ -782,13 +803,14 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
 RuntimeError* checkNumberOperand(Token operator, Object operand){
     if (operand.type == NUMBER) return NULL;
     runtime_error_flag = 1;
-    
+    throw_exception(65, "Operand must be a number.");
     return createRuntimeError(operator, "Operand must be a number.");
 }
 
 RuntimeError* checkNumberOperands(Token operator, Object left, Object right){
     if (left.type == NUMBER && right.type == NUMBER) return NULL;
     runtime_error_flag = 1;
+    throw_exception(65, "Operands must be numbers.");
     return createRuntimeError(operator, "Operands must be numbers.");
 }
 
@@ -908,6 +930,8 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
             runtime_error_flag = 1;
             runtime_error = createRuntimeError(*expr_binary->operator,
                                              "Operands must be two numbers or two strings.");
+            throw_exception(70, "Operands must be two numbers or two strings.");
+
             return runtime_error;
         case SLASH:
             runtime_error = checkNumberOperands(*expr_binary->operator, *left, *right);
@@ -955,7 +979,15 @@ void interpret(struct Interpreter* self, Array* statements){
         } else if (element->type == EXPRESSION_STMT) {
             stmt = (Stmt*)element->data.expr_stmt;
         }
-        execute(self, stmt);
+        int error_code = setjmp(run_error_jmp);
+
+        if (error_code == 0){
+            execute(self, stmt);
+        } else{
+            printf("%s\n", current_exception.message);
+            exit(current_exception.code);
+        }
+
         if (runtime_error_flag){
             exit(70);
         }
@@ -1237,7 +1269,7 @@ Expr* primary(Parser *self){
     }
 
     had_error = 1;
-    // self->parserError(self, peek(self), "Expect expression.");
+    self->parserError(self, peek(self), "Expect expression.");
 }
 
 Expr* unary(Parser *self){
@@ -1333,7 +1365,7 @@ Stmt* printStatement(Parser* self){
 
 Stmt* expressionStatement(Parser *self){
     Expr* expr = expression(self);
-    // consume(self, SEMICOLON, "Expect ';' after expression.");
+    consume(self, SEMICOLON, "Expect ';' after expression.");
     return (Stmt*)createExpressionStmt(expr);
 }
 
@@ -1387,13 +1419,6 @@ Array* parse(Parser* self){
     }
 
     return stmt_array;
-
-    // had_error = 0;
-    // Expr* result =  expression(self);
-    // if (had_error){
-    //     return NULL;
-    // }
-    // return result;
 }
 
 
@@ -1465,7 +1490,7 @@ void* ExprLiteralAccept(Expr *self, Visitor *visitor){
 }
 
 void report(int line, char* where, char* message){
-    // printf("[line %d] Error %s: %s\n", line, where, message);
+    printf("[line %d] Error %s: %s\n", line, where, message);
     had_error = 1;
 }
 
@@ -1628,7 +1653,7 @@ void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt){
     size_t offset = offsetof(Interpreter, stmt_visitor);
 
     Object* value = evaluate((Interpreter*)((char*)self - offset), expr_stmt->expression);
-    printf("%s\n", stringify(*value));
+    // printf("%s\n", stringify(*value));
 
     return NULL;
 };
