@@ -1415,7 +1415,7 @@ Array* parse(Parser* self){
             element.data.expr_stmt = (Expression*)stmt;
         } else {
             fprintf(stderr, "Error: Unknown statements");
-            exit(70);
+            exit(65);
         }
         addElement(stmt_array, element);
     }
