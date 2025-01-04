@@ -229,7 +229,6 @@ typedef struct Element {
 
 typedef struct Array {
     Element* elements;        // 실제 데이터를 저장하는 배열
-    size_t element_size; // 각 요소의 크기
     size_t count;        // 배열에 저장된 요소의 개수
     size_t capacity;    // 배열의 용량
 } Array;
@@ -237,7 +236,7 @@ typedef struct Array {
 
 // TODO: Array에 서로 다른 element 저장하게 만들기
 
-Array* createArray(size_t elementSize, size_t initialCapacity);
+Array* createArray(size_t initialCapacity);
 void addElement(Array* array, Element element); 
 void* getElement(Array* array, size_t index);
 void releaseArray(Array* array);
@@ -1354,7 +1353,7 @@ void *synchronize(Parser* self){
 }
 
 Array* parse(Parser* self){
-    Array* stmt_array = createArray(sizeof(Stmt), INITIAL_LIST_SIZE);
+    Array* stmt_array = createArray(INITIAL_LIST_SIZE);
     if (!stmt_array){
         fprintf(stderr, "Error: Initial memory allocation of Stmt list failed\n");
         exit(70);
@@ -1550,9 +1549,8 @@ Interpreter *createInterpreter(){
     return interpreter;
 }
 
-Array* createArray(size_t elementSize, size_t initialCapacity) {
+Array* createArray(size_t initialCapacity) {
     Array* array = (Array*)malloc(sizeof(Array));
-    array->element_size = elementSize;
     array->count = 0;
     array->capacity = initialCapacity;
     array->elements = (Element*)malloc(sizeof(Element) * initialCapacity);
@@ -1561,15 +1559,11 @@ Array* createArray(size_t elementSize, size_t initialCapacity) {
 
 void addElement(Array* array, Element element) {
     if (array->count >= array->capacity) {
-        // 용량 증가
         array->capacity *= 2;
-        array->elements = realloc(array->elements, array->element_size * array->capacity);
+        array->elements = realloc(array->elements, sizeof(Element) * array->capacity);
     }
     // 새 요소 복사
     array->elements[array->count++] = element;
-    // void* target = (char*)array->data + (array->count * array->element_size);
-    // memcpy(target, element, array->element_size);
-    // array->count++;
 }
 
 void* getElement(Array* array, size_t index) {
@@ -1632,7 +1626,7 @@ void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt){
 
     size_t offset = offsetof(Interpreter, stmt_visitor);
     Object* value = evaluate((Interpreter*)((char*)self - offset), print_stmt->expression); 
-    printf("%s", stringify(*value));
+    printf("%s\n", stringify(*value));
     return NULL;
 }
 
