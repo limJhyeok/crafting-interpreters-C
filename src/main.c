@@ -410,12 +410,23 @@ int main(int argc, char *argv[]) {
                 exit(65);
             }
 
-            // AstPrinter *printer = newAstPrinter();
-            // char *output = printer->print((Visitor *)printer, statements);
+            AstPrinter *printer = newAstPrinter();
+            char *output;
+            
+            for (int i = 0; i < statements->count; i++){
+                Expr* expr;
+                Element* elem = getElement(statements, i);
+                if (elem->type == PRINT_STMT){
+                    expr = elem->data.print_stmt->expression;
+                } else if (elem->type == EXPRESSION_STMT){
+                    expr = elem->data.expr_stmt->expression;
+                }
+                output = printer->print((Visitor *)printer, expr);
+                printf("%s\n", output);
+            }
 
-            // printf("%s\n", output);
 
-            // free(printer);
+            free(printer);
             releaseArray(statements);
             free(parser);
             releaseTokenList();
@@ -1222,7 +1233,7 @@ Expr* primary(Parser *self){
         return (Expr *)expr_grouping;
     }
     if (match(self, (TokenType[]){IDENTIFIER}, 1)){
-        exit(65);
+        // exit(65);
     }
 
     had_error = 1;
