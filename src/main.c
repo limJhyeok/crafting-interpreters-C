@@ -1430,8 +1430,15 @@ Stmt* declaration(Parser* self){
 Stmt* varDeclaration(Parser* self){
     Token* name = consume(self, IDENTIFIER, "Expect variable name.");
     Expr* initializer = NULL;
-    if (match(self, (TokenType[]){EQUAL}, 1)) initializer = expression(self);
-
+    if (match(self, (TokenType[]){EQUAL}, 1)) {
+        initializer = expression(self);
+    } else {
+        ExprLiteral* expr = malloc(sizeof(ExprLiteral));
+        expr->base.accept = ExprLiteralAccept;
+        expr->type = NIL;
+        expr->value = "nil";
+        initializer = (Expr*)expr;
+    }
     consume(self, SEMICOLON, "Expect ';' after variable declaration.");
     return (Stmt*)createVarStmt(name, initializer);
 }

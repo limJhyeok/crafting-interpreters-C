@@ -1,3 +1,2 @@
-var quz = 76;
-var baz = quz;
-print baz + quz;
+var a = 10;
+print a;
