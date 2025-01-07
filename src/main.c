@@ -148,6 +148,7 @@ typedef struct Visitor {
     void *(*visitGroupingExpr)(struct Visitor *self, Expr *expr);
     void *(*visitLiteralExpr)(struct Visitor *self, Expr *expr);
     void *(*visitVariableExpr)(struct Visitor *self, Expr *expr);
+    void *(*visitAssignExpr)(struct Visitor *self, Expr *expr);
 } Visitor;
 
 typedef struct ExprBinary
@@ -184,12 +185,20 @@ typedef struct Variable
     Token* name;
 } Variable;
 
+typedef struct Assign {
+    Expr base;
+    Token* name;
+    Expr* value;
+} Assign;
+
 
 void* ExprBinaryAccept(Expr *self, Visitor *visitor);
 void* ExprUnaryAccept(Expr *self, Visitor *visitor);
 void* ExprGroupingAccept(Expr *self, Visitor *visitor);
 void* ExprLiteralAccept(Expr *self, Visitor *visitor);
 void* ExprVariableAccept(Expr *self, Visitor *visitor);
+void *ExprAssignAccept(Expr *self, Visitor *visitor);
+
 
 typedef struct AstPrinter{
     Visitor base;
@@ -299,13 +308,16 @@ typedef struct Parser {
     Expr* (*factor)(struct Parser*);
     Expr* (*term)(struct Parser*);
     Expr* (*comparison)(struct Parser*);
+    Expr* (*assignment)(struct Parser *self);
     Expr* (*equality)(struct Parser*);
     Expr* (*expression)(struct Parser*);
     Stmt* (*statement)(struct Parser*);
+    Stmt* (*varDeclaration)(struct Parser* self);
+    Stmt* (*declaration)(struct Parser* self);
     Stmt* (*printStatement)(struct Parser*);
     Stmt* (*expressionStatement)(struct Parser*);
     ParseError* (*parserError)(struct Parser*, Token*, char*);
-    void (*synchronize)(struct Parser*);
+    void* (*synchronize)(struct Parser*);
     Array* (*parse)(struct Parser*);
 } Parser;
 
@@ -321,6 +333,7 @@ Expr* unary(Parser *self);
 Expr* factor(Parser *self);
 Expr* term(Parser* self);
 Expr* comparison(Parser* self);
+Expr* assignment(Parser *self);
 Expr* equality(Parser *self);
 Expr* expression(Parser* self);
 Stmt* varDeclaration(Parser* self);
@@ -343,12 +356,14 @@ typedef struct Environment{
     Entry* values[TABLE_SIZE];
     void* (*define)(struct Environment* self, char* name, Object* value);
     Object* (*get)(struct Environment* self, Token* name);
+    void* (*assign)(struct Environment* self, Token* name, Object* value);
 } Environment;
 
 Environment* createEnvironment();
 
 void* define(Environment* self, char* name, Object* value);
 Object* get(Environment* self, Token* name);
+void* assign(Environment* self, Token* name, Object* value);
 
 Token *g_head_pointer;
 Token *g_tail_pointer;
@@ -385,6 +400,7 @@ void* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitVariableExpr(Visitor* self, Expr* expr);
+void* InterpreterVisitAssignExpr(Visitor* self, Expr* expr);
 Object* evaluate(struct Interpreter* self, Expr* expr);
 void execute(struct Interpreter* self, Stmt* stmt);
 void interpret(struct Interpreter* self, Array* statements);
@@ -855,6 +871,17 @@ void* InterpreterVisitVariableExpr(Visitor* self, Expr* expr){
     return environment->get(environment, ((Variable*)expr)->name);
 }
 
+void* InterpreterVisitAssignExpr(Visitor* self, Expr* expr){
+    Assign* expr_assign = (Assign*)expr;
+    size_t offset = offsetof(Interpreter, environment);
+    Environment* environment = (Environment*)((char*)self + offset);
+
+    Object* value = evaluate((Interpreter*)self, expr_assign->value);
+
+    environment->assign(environment, expr_assign->name, value);
+    return value;
+}
+
 RuntimeError* checkNumberOperand(Token operator, Object operand){
     if (operand.type == NUMBER) return NULL;
     runtime_error_flag = 1;
@@ -1035,9 +1062,6 @@ void interpret(struct Interpreter* self, Array* statements){
             stmt = (Stmt*)element->data.expr_stmt;
         } else if (element->type == VAR_STMT){
             stmt = (Stmt*)element->data.var_stmt;
-            // Var* var = (Var*)element->data.var_stmt;
-            // Token* name = var->name;
-            // stmt = (Stmt*)(var);
         }
         execute(self, stmt);
         if (runtime_error_flag){
@@ -1398,6 +1422,26 @@ Expr* comparison(Parser* self){
     return expr;
 }
 
+Expr* assignment(Parser *self){
+    Expr* expr = equality(self);
+    if (match(self, (TokenType[]){EQUAL}, 1)){
+        Token* equals = previous(self);
+        Expr* value = assignment(self);
+        if (expr->accept == ExprVariableAccept){
+            Token* name = ((Variable*)expr)->name;
+
+            // createAssignExpr(name, value);
+            Assign* expr_assign = (Assign*)malloc(sizeof(Assign));
+            expr_assign->base.accept = ExprAssignAccept;
+            expr_assign->name = name;
+            expr_assign->value = value;
+            return (Expr*)expr_assign;
+        }
+        error(equals, "Invalid assignment target.");
+    }
+    return expr;
+}
+
 Expr* equality(Parser *self){
     Expr* expr = comparison(self);
 
@@ -1415,7 +1459,8 @@ Expr* equality(Parser *self){
 }
 
 Expr* expression(Parser* self){
-    return equality(self);
+    return assignment(self);
+    // return equality(self);
 }
 
 Stmt* declaration(Parser* self){
@@ -1547,10 +1592,16 @@ Parser* createParser() {
         parser->factor = factor;
         parser->term = term;
         parser->comparison = comparison;
+        parser->assignment = assignment;
         parser->equality = equality;
         parser->expression = expression;
         parser->statement = statement;
+        parser->varDeclaration = varDeclaration;
+        parser->declaration = declaration;
+        parser->printStatement = printStatement;
+        parser->expressionStatement = expressionStatement;
         parser->parserError = parserError;
+        parser->synchronize = synchronize;
         parser->parse = parse;
     }
     return parser;
@@ -1593,6 +1644,11 @@ void* ExprLiteralAccept(Expr *self, Visitor *visitor){
 void* ExprVariableAccept(Expr *self, Visitor *visitor){
     visitor->visitVariableExpr(visitor, self);
 }
+
+void *ExprAssignAccept(Expr *self, Visitor *visitor){
+    visitor->visitAssignExpr(visitor, self);
+}
+
 
 
 void report(int line, char* where, char* message){
@@ -1684,12 +1740,13 @@ Interpreter *createInterpreter(){
     interpreter->base.visitBinaryExpr = InterpreterVisitBinaryExpr;
     interpreter->base.visitUnaryExpr = InterpreterVisitUnaryExpr;
     interpreter->base.visitVariableExpr = InterpreterVisitVariableExpr;
+    interpreter->base.visitAssignExpr = InterpreterVisitAssignExpr;
     interpreter->stmt_visitor.visitExpressionStmt = InterpreterVisitExpressionStmt;
     interpreter->stmt_visitor.visitPrintStmt = InterpreterVisitPrintStmt;
     interpreter->stmt_visitor.visitVarStmt = InterpretervisitVarStmt;
     interpreter->environment.get = get;
     interpreter->environment.define = define;
-    // interpreter->environment = createEnvironment();
+    interpreter->environment.assign = assign;
     interpreter->evaluate = evaluate;
     interpreter->execute = execute;
     interpreter->interpret = interpret;
@@ -1941,5 +1998,17 @@ Object* get(Environment* self, Token* name){
     char buffer[MAX_TOKEN_LEXEME_SIZE + 30] = "Undefined variable '"; 
     strcat(buffer, name->lexeme);
     strcat(buffer, "'.");
+    createRuntimeError(*name, buffer);
+}
+
+void* assign(Environment* self, Token* name, Object* value){
+    if (find(self->values, name->lexeme)){
+        insert(self->values, name->lexeme, value);
+        return NULL;
+    }
+    char buffer[MAX_TOKEN_LEXEME_SIZE + 30] = "Undefined variable '"; 
+    strcat(buffer, name->lexeme);
+    strcat(buffer, "'.");
+    runtime_error_flag = 1;
     createRuntimeError(*name, buffer);
 }
