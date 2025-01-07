@@ -3,34 +3,18 @@
 #include <string.h>
 #include <malloc.h>
 #include <stddef.h> // offsetof
-#include <setjmp.h> // error handling
 
+// Token
 #define N_RESERVED_WORD 16
 #define MAX_LEN_RESERVED_WORD 10
 #define MAX_TOKEN_LEXEME_SIZE 20
 #define MAX_TOKEN_LITERAL_SIZE 100
+// Dynamic Array
 #define INITIAL_LIST_SIZE 2
+// Hash table
+#define TABLE_SIZE 100 
+#define KEY_SIZE 50
 
-jmp_buf run_error_jmp;
-
-
-// Excpetion - start
-typedef struct {
-    int code;                 // 예외 코드
-    char message[256];        // 예외 메시지
-} Exception;
-// Exception - end
-
-Exception current_exception;
-
-void throw_exception(int code, const char *message) {
-    current_exception.code = code;           // 코드 설정
-    strncpy(current_exception.message, message, sizeof(current_exception.message) - 1);
-    current_exception.message[sizeof(current_exception.message) - 1] = '\0'; // null-terminate
-    longjmp(run_error_jmp, code);            // 예외 발생
-}
-
-// Token - start
 
 typedef enum TokenType {
     // Single-character tokens.
@@ -136,6 +120,20 @@ Object* createObject(TokenType type, const char* literal);
 
 // Object - end
 
+
+// Hash map - start
+typedef struct Entry {
+    char key[KEY_SIZE];
+    Object* value;
+    struct Entry* next; // 충돌 처리를 위한 체이닝
+} Entry;
+
+unsigned int hash(char* key);
+void insert(Entry* hashTable[], char* key, Object* value);
+Object* find(Entry* hashTable[], char* key);
+void releaseHashTable(Entry* hashTable[]);
+// Hash map - end
+
 // Expression - start
 struct Visitor;
 
@@ -149,6 +147,7 @@ typedef struct Visitor {
     void *(*visitUnaryExpr)(struct Visitor *self, Expr *expr);
     void *(*visitGroupingExpr)(struct Visitor *self, Expr *expr);
     void *(*visitLiteralExpr)(struct Visitor *self, Expr *expr);
+    void *(*visitVariableExpr)(struct Visitor *self, Expr *expr);
 } Visitor;
 
 typedef struct ExprBinary
@@ -179,10 +178,18 @@ typedef struct ExprLiteral
     char *value;
 } ExprLiteral;
 
+typedef struct Variable
+{
+    Expr base;
+    Token* name;
+} Variable;
+
+
 void* ExprBinaryAccept(Expr *self, Visitor *visitor);
 void* ExprUnaryAccept(Expr *self, Visitor *visitor);
 void* ExprGroupingAccept(Expr *self, Visitor *visitor);
 void* ExprLiteralAccept(Expr *self, Visitor *visitor);
+void* ExprVariableAccept(Expr *self, Visitor *visitor);
 
 typedef struct AstPrinter{
     Visitor base;
@@ -219,25 +226,36 @@ typedef struct Expression {
     Expr* expression;
 } Expression;
 
+typedef struct Var {
+    Stmt base;
+    Expr* initializer;
+    Token* name;
+} Var;
+
 typedef struct StmtVisitor{
     void* (*visitExpressionStmt)(struct StmtVisitor* self, Stmt* stmt);
     void* (*visitPrintStmt)(struct StmtVisitor* self, Stmt* stmt);
+    void* (*visitVarStmt)(struct StmtVisitor* self, Stmt* stmt);
 } StmtVisitor;
 
 // Statement - end
 
 void* PrintStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 void* ExpressionStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
+void* VarStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 
 Print* createPrintStmt(Expr* expression);
 Expression* createExpressionStmt(Expr* expressoin);
+Var* createVarStmt(Token* name, Expr* expression);
 
 void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt);
 void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt);
+void* InterpretervisitVarStmt(StmtVisitor* self, Stmt* stmt);
 
 typedef enum {
     PRINT_STMT,
-    EXPRESSION_STMT
+    EXPRESSION_STMT,
+    VAR_STMT
 } ElementType;
 
 typedef struct Element {
@@ -245,6 +263,7 @@ typedef struct Element {
     union {
         Print* print_stmt;
         Expression* expr_stmt;
+        Var* var_stmt;
     } data;
 } Element;
 
@@ -254,8 +273,6 @@ typedef struct Array {
     size_t capacity;    // 배열의 용량
 } Array;
 
-
-// TODO: Array에 서로 다른 element 저장하게 만들기
 
 Array* createArray(size_t initialCapacity);
 void addElement(Array* array, Element element); 
@@ -306,6 +323,8 @@ Expr* term(Parser* self);
 Expr* comparison(Parser* self);
 Expr* equality(Parser *self);
 Expr* expression(Parser* self);
+Stmt* varDeclaration(Parser* self);
+Stmt* declaration(Parser* self);
 Stmt* statement(Parser* self);
 Stmt* printStatement(Parser* self);
 Stmt* expressionStatement(Parser* self);
@@ -318,6 +337,18 @@ Token* consume(Parser* self, TokenType type, char* message);
 Parser* createParser();
 
 // Parser - end
+
+// Environment - start
+typedef struct Environment{
+    Entry* values[TABLE_SIZE];
+    void* (*define)(struct Environment* self, char* name, Object* value);
+    Object* (*get)(struct Environment* self, Token* name);
+} Environment;
+
+Environment* createEnvironment();
+
+void* define(Environment* self, char* name, Object* value);
+Object* get(Environment* self, Token* name);
 
 Token *g_head_pointer;
 Token *g_tail_pointer;
@@ -332,6 +363,7 @@ void error(Token* token, char* message);
 typedef struct Interpreter {
     Visitor base;
     StmtVisitor stmt_visitor;
+    Environment environment;
     Object* (*evaluate)(struct Interpreter* self, Expr* expr);
     void (*execute)(struct Interpreter* self, Stmt* stmt);
     void (*interpret)(struct Interpreter* self, Array* array);
@@ -352,6 +384,7 @@ void* InterpreterVisitLiteralExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitGroupingExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr);
+void* InterpreterVisitVariableExpr(Visitor* self, Expr* expr);
 Object* evaluate(struct Interpreter* self, Expr* expr);
 void execute(struct Interpreter* self, Stmt* stmt);
 void interpret(struct Interpreter* self, Array* statements);
@@ -487,12 +520,15 @@ int main(int argc, char *argv[]) {
                     expr = elem->data.print_stmt->expression;
                 } else if (elem->type == EXPRESSION_STMT){
                     expr = elem->data.expr_stmt->expression;
+                } else if (elem ->type == VAR_STMT){
+                    expr = elem->data.var_stmt->initializer;
                 }
                 interpreter->interpretExpr(interpreter, expr);
             }
 
             free(parser);
             releaseArray(statements);
+            releaseHashTable(interpreter->environment.values);
             free(interpreter);
             releaseTokenList();
         }
@@ -813,6 +849,12 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
     return NULL;
 }
 
+void* InterpreterVisitVariableExpr(Visitor* self, Expr* expr){
+    size_t offset = offsetof(Interpreter, environment);
+    Environment* environment = (Environment*)((char*)self + offset);
+    return environment->get(environment, ((Variable*)expr)->name);
+}
+
 RuntimeError* checkNumberOperand(Token operator, Object operand){
     if (operand.type == NUMBER) return NULL;
     runtime_error_flag = 1;
@@ -991,9 +1033,13 @@ void interpret(struct Interpreter* self, Array* statements){
             stmt = (Stmt*)element->data.print_stmt;
         } else if (element->type == EXPRESSION_STMT) {
             stmt = (Stmt*)element->data.expr_stmt;
+        } else if (element->type == VAR_STMT){
+            stmt = (Stmt*)element->data.var_stmt;
+            // Var* var = (Var*)element->data.var_stmt;
+            // Token* name = var->name;
+            // stmt = (Stmt*)(var);
         }
         execute(self, stmt);
-        // TODO: evaluate일 때는 다르게 해야함
         if (runtime_error_flag){
             exit(70);
         }
@@ -1282,7 +1328,11 @@ Expr* primary(Parser *self){
         return (Expr *)expr_grouping;
     }
     if (match(self, (TokenType[]){IDENTIFIER}, 1)){
-        // exit(65);
+        // todo: Variable Expression
+        Variable* expr_var = malloc(sizeof(Variable));
+        expr_var->base.accept = ExprVariableAccept;
+        expr_var->name = previous(self);
+        return (Expr *)expr_var;
     }
 
     had_error = 1;
@@ -1368,6 +1418,24 @@ Expr* expression(Parser* self){
     return equality(self);
 }
 
+Stmt* declaration(Parser* self){
+    if (match(self, (TokenType[]){VAR}, 1)) return varDeclaration(self);
+    if (had_error){
+        synchronize(self);
+        return NULL;
+    }
+    return statement(self);
+}
+
+Stmt* varDeclaration(Parser* self){
+    Token* name = consume(self, IDENTIFIER, "Expect variable name.");
+    Expr* initializer = NULL;
+    if (match(self, (TokenType[]){EQUAL}, 1)) initializer = expression(self);
+
+    consume(self, SEMICOLON, "Expect ';' after variable declaration.");
+    return (Stmt*)createVarStmt(name, initializer);
+}
+
 Stmt* statement(Parser* self){
     if (match(self, (TokenType[]){PRINT}, 1)) return printStatement(self);
 
@@ -1419,7 +1487,8 @@ Array* parse(Parser* self){
         exit(70);
     }
     while (!isAtEnd(self)) {
-        Stmt* stmt = statement(self);
+        // Stmt* stmt = statement(self);
+        Stmt* stmt = declaration(self);
         
         Element element;
         if (stmt->accept == PrintStmtAccept){
@@ -1428,7 +1497,11 @@ Array* parse(Parser* self){
         } else if (stmt->accept == ExpressionStmtAccept){
             element.type = EXPRESSION_STMT;
             element.data.expr_stmt = (Expression*)stmt;
-        } else {
+        } else if (stmt->accept == VarStmtAccept){
+            element.type = VAR_STMT;
+            element.data.var_stmt = (Var*)(stmt);
+        } 
+        else {
             fprintf(stderr, "Error: Unknown statements");
             exit(65);
         }
@@ -1509,6 +1582,11 @@ void* ExprGroupingAccept(Expr *self, Visitor *visitor){
 void* ExprLiteralAccept(Expr *self, Visitor *visitor){
     visitor->visitLiteralExpr(visitor, self);
 }
+
+void* ExprVariableAccept(Expr *self, Visitor *visitor){
+    visitor->visitVariableExpr(visitor, self);
+}
+
 
 void report(int line, char* where, char* message){
     // printf("[line %d] Error %s: %s\n", line, where, message);
@@ -1598,8 +1676,13 @@ Interpreter *createInterpreter(){
     interpreter->base.visitGroupingExpr = InterpreterVisitGroupingExpr;
     interpreter->base.visitBinaryExpr = InterpreterVisitBinaryExpr;
     interpreter->base.visitUnaryExpr = InterpreterVisitUnaryExpr;
+    interpreter->base.visitVariableExpr = InterpreterVisitVariableExpr;
     interpreter->stmt_visitor.visitExpressionStmt = InterpreterVisitExpressionStmt;
     interpreter->stmt_visitor.visitPrintStmt = InterpreterVisitPrintStmt;
+    interpreter->stmt_visitor.visitVarStmt = InterpretervisitVarStmt;
+    interpreter->environment.get = get;
+    interpreter->environment.define = define;
+    // interpreter->environment = createEnvironment();
     interpreter->evaluate = evaluate;
     interpreter->execute = execute;
     interpreter->interpret = interpret;
@@ -1645,6 +1728,11 @@ void* ExpressionStmtAccept(Stmt *self, StmtVisitor *stmt_visitor){
     stmt_visitor->visitExpressionStmt(stmt_visitor, self);
 };
 
+void* VarStmtAccept(Stmt *self, StmtVisitor *stmt_visitor){
+    stmt_visitor->visitVarStmt(stmt_visitor, self);
+}
+
+
 
 Print* createPrintStmt(Expr* expr){
     Print* print_stmt = (Print*)malloc(sizeof(Print));
@@ -1652,7 +1740,7 @@ Print* createPrintStmt(Expr* expr){
         fprintf(stderr, "Memory allocation failed\n");
         exit(EXIT_FAILURE);
     }
-    // TODO: visitPrintStmt
+
     print_stmt->base.accept = PrintStmtAccept;
     print_stmt->expression = expr;
     return print_stmt;
@@ -1669,6 +1757,18 @@ Expression* createExpressionStmt(Expr* expr){
     return expression_stmt;
 }
 
+Var* createVarStmt(Token* name, Expr* expression){
+    Var* var_stmt = (Var*)malloc(sizeof(Var));
+    if (!var_stmt){
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);        
+    }
+    var_stmt->base.accept = VarStmtAccept;
+    var_stmt->name = name;
+    var_stmt->initializer = expression;
+    return var_stmt;
+}
+
 void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt){
     Expression* expr_stmt = (Expression*)stmt;
     size_t offset = offsetof(Interpreter, stmt_visitor);
@@ -1677,6 +1777,19 @@ void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt){
 
     return NULL;
 };
+
+void* InterpretervisitVarStmt(StmtVisitor* self, Stmt* stmt){
+    Object* value = {NULL};
+    Expr* init = ((Var*)stmt)->initializer;
+    size_t visitor_offset = offsetof(Interpreter, stmt_visitor);
+    size_t env_offset = offsetof(Interpreter, environment);
+    Interpreter* interpreter = (Interpreter*)((char*)self - visitor_offset); 
+    Environment* environment = (Environment*)((char*)interpreter + env_offset);
+    if (init){
+        value = evaluate(interpreter, init);
+    }
+    define(environment, ((Var*)stmt)->name->lexeme, value);
+}
 
 
 void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt){
@@ -1733,4 +1846,93 @@ Object* createObject(TokenType type,  const char* literal){
         object->value = str;
         return object;
     }
+}
+
+unsigned int hash(char* key) {
+    unsigned int hash = 0;
+    while (*key) {
+        hash = (hash * 31) + *key++;
+    }
+    return hash % TABLE_SIZE;
+}
+
+void insert(Entry* hashTable[], char* key, Object* value) {
+    unsigned int idx = hash(key);
+    Entry* entry = hashTable[idx];
+
+    while (entry != NULL) {
+        if (strcmp(entry->key, key) == 0) {
+            entry->value = value; // 키가 이미 존재하면 값 업데이트
+            return;
+        }
+        entry = entry->next;
+    }
+
+    // 새로운 항목 추가
+    Entry* newEntry = (Entry*)malloc(sizeof(Entry));
+    strcpy(newEntry->key, key);
+    newEntry->value = value;
+    newEntry->next = hashTable[idx];
+    hashTable[idx] = newEntry;
+}
+
+
+Object* find(Entry* hashTable[], char* key) {
+    unsigned int idx = hash(key);
+    Entry* entry = hashTable[idx];
+
+    while (entry != NULL) {
+        if (strcmp(entry->key, key) == 0) {
+            return entry->value; // 값 반환
+        }
+        entry = entry->next;
+    }
+    return NULL;
+}
+
+void releaseHashTable(Entry* hashTable[]) {
+    for (int i = 0; i < TABLE_SIZE; i++) {
+        Entry* entry = hashTable[i];
+        while (entry != NULL) {
+            Entry* temp = entry;
+            entry = entry->next;
+            
+            if (temp->value) {
+                if (temp->value->type == STRING) {
+                    free(((StringValue*)temp->value->value)->string);
+                    free(temp->value->value);
+                } else if (temp->value->type == NUMBER) {
+                    free(temp->value->value);
+                } else if (temp->value->type == TRUE || temp->value->type == FALSE) {
+                    free(temp->value->value);
+                }
+                free(temp->value);
+            }
+            free(temp);
+        }
+        hashTable[i] = NULL;
+    }
+}
+
+Environment* createEnvironment(){
+    Environment* env = (Environment*)malloc(sizeof(Environment));
+    env->define = define;
+    env->get = get;
+    return env;
+}
+
+
+void* define(Environment* self, char* name, Object* value){
+    insert(self->values, name, value);
+}
+
+Object* get(Environment* self, Token* name){
+    Object* object = find(self->values, name->lexeme);
+    if (object) return object;
+
+    runtime_error_flag = 1;
+    char buffer[MAX_TOKEN_LEXEME_SIZE + 30] = "Undefined variable '"; 
+    strcat(buffer, name->lexeme);
+    strcat(buffer, "'.");
+    createRuntimeError(*name, buffer);
 }
