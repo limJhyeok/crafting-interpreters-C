@@ -394,6 +394,7 @@ Stmt* statement(Parser* self);
 Stmt* printStatement(Parser* self);
 Stmt* ifStatement(Parser* self);
 Stmt* whileStatement(Parser* self);
+Stmt* forStatement(Parser* self);
 Stmt* expressionStatement(Parser* self);
 Stmt* blockStatement(Parser* self);
 
@@ -1186,6 +1187,8 @@ void executeBlock(Interpreter* self, Array* statements, Environment* env){
             stmt = (Stmt*)element->data.block_stmt;
         } else if (element->type == IF_STMT){
             stmt = (Stmt*)element->data.if_stmt;
+        } else if (element->type == WHILE_STMT){
+            stmt = (Stmt*)element->data.while_stmt;
         }
         execute(self, stmt);
     }
@@ -1634,6 +1637,7 @@ Stmt* varDeclaration(Parser* self){
 }
 
 Stmt* statement(Parser* self){
+    if (match(self, (TokenType[]){FOR}, 1)) return forStatement(self);
     if (match(self, (TokenType[]){IF}, 1)) return ifStatement(self);
     if (match(self, (TokenType[]){PRINT}, 1)) return printStatement(self);
     if (match(self, (TokenType[]){WHILE}, 1)) return whileStatement(self);
@@ -1681,6 +1685,130 @@ Stmt* whileStatement(Parser* self){
     return (Stmt*)while_stmt;
 }
 
+Stmt* forStatement(Parser *self){
+    consume(self, LEFT_PAREN, "Expect '(' after 'for'.");
+    Stmt* initilizer = NULL;
+    if (match(self, (TokenType[]){SEMICOLON}, 1)){
+        initilizer = NULL;
+    } else if (match(self, (TokenType[]){VAR}, 1)){
+        initilizer = varDeclaration(self);
+    } else {
+        initilizer = expressionStatement(self);
+    }
+    Expr* condition = NULL;
+    if (!check(self, SEMICOLON)){
+        condition = expression(self);
+    }
+    consume(self, SEMICOLON, "Expect ';' after loop condition.");
+    Expr* increment = NULL;
+    if (!check(self, RIGHT_PAREN)){
+        increment = expression(self);
+    }
+    consume(self, RIGHT_PAREN, "Expect ')' after for clauses.");
+    Stmt* body = statement(self);
+    if (increment != NULL){
+        Array* stmt_array = createArray(INITIAL_LIST_SIZE);
+        Element element;
+        if (body->accept == PrintStmtAccept){
+            element.type = PRINT_STMT;
+            element.data.print_stmt = (Print*)body;
+        } else if (body->accept == ExpressionStmtAccept){
+            element.type = EXPRESSION_STMT;
+            element.data.expr_stmt = (Expression*)body;
+        } else if (body->accept == VarStmtAccept){
+            element.type = VAR_STMT;
+            element.data.var_stmt = (Var*)(body);
+        } else if (body->accept == BlockStmtAccept){
+            element.type = BLOCK_STMT;
+            element.data.block_stmt = (Block*)body;
+        } else if (body->accept == IfStmtAccept){
+            element.type = IF_STMT;
+            element.data.if_stmt = (If*)body;
+        } else if (body->accept == WhileStmtAccept){
+            element.type = WHILE_STMT;
+            element.data.while_stmt = (While*)body;
+        }
+        else {
+            fprintf(stderr, "Error: Unknown statement");
+            exit(65);
+        }
+        addElement(stmt_array, element);
+        
+        Element increment_element;
+        increment_element.type = EXPRESSION_STMT;
+        increment_element.data.expr_stmt = createExpressionStmt(increment);
+        addElement(stmt_array, increment_element);
+
+        body = (Stmt*)createBlockStmt(stmt_array);
+    }
+
+    if (condition == NULL){
+        ExprLiteral* expr_literal = (ExprLiteral*)malloc(sizeof(ExprLiteral));
+        expr_literal->base.accept = ExprLiteralAccept;
+        expr_literal->type = TRUE;
+        expr_literal->value = "true";
+        condition = (Expr*)expr_literal;
+    }
+    body = (Stmt*)createWhileStmt(condition, body);
+
+    if (initilizer != NULL){
+        Array* stmt_array = createArray(INITIAL_LIST_SIZE);
+        Element element;
+        if (initilizer->accept == PrintStmtAccept){
+            element.type = PRINT_STMT;
+            element.data.print_stmt = (Print*)initilizer;
+        } else if (initilizer->accept == ExpressionStmtAccept){
+            element.type = EXPRESSION_STMT;
+            element.data.expr_stmt = (Expression*)initilizer;
+        } else if (initilizer->accept == VarStmtAccept){
+            element.type = VAR_STMT;
+            element.data.var_stmt = (Var*)(initilizer);
+        } else if (initilizer->accept == BlockStmtAccept){
+            element.type = BLOCK_STMT;
+            element.data.block_stmt = (Block*)initilizer;
+        } else if (initilizer->accept == IfStmtAccept){
+            element.type = IF_STMT;
+            element.data.if_stmt = (If*)initilizer;
+        } else if (initilizer->accept == WhileStmtAccept){
+            element.type = WHILE_STMT;
+            element.data.while_stmt = (While*)initilizer;
+        }
+        else {
+            fprintf(stderr, "Error: Unknown statement");
+            exit(65);
+        }
+        addElement(stmt_array, element);
+
+        Element body_element;
+        if (body->accept == PrintStmtAccept){
+            body_element.type = PRINT_STMT;
+            body_element.data.print_stmt = (Print*)body;
+        } else if (body->accept == ExpressionStmtAccept){
+            body_element.type = EXPRESSION_STMT;
+            body_element.data.expr_stmt = (Expression*)body;
+        } else if (body->accept == VarStmtAccept){
+            body_element.type = VAR_STMT;
+            body_element.data.var_stmt = (Var*)(body);
+        } else if (body->accept == BlockStmtAccept){
+            body_element.type = BLOCK_STMT;
+            body_element.data.block_stmt = (Block*)body;
+        } else if (body->accept == IfStmtAccept){
+            body_element.type = IF_STMT;
+            body_element.data.if_stmt = (If*)body;
+        } else if (body->accept == WhileStmtAccept){
+            body_element.type = WHILE_STMT;
+            body_element.data.while_stmt = (While*)body;
+        }
+        else {
+            fprintf(stderr, "Error: Unknown statement");
+            exit(65);
+        }
+
+        addElement(stmt_array, body_element);
+        body = (Stmt*)createBlockStmt(stmt_array);
+    }
+    return body;
+}
 
 ParseError* parserError(Parser* self,Token* token, char* message){
     error(token, message);
