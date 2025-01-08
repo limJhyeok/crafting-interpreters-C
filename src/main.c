@@ -1845,7 +1845,10 @@ Array* parse(Parser* self){
     while (!isAtEnd(self)) {
         // Stmt* stmt = statement(self);
         Stmt* stmt = declaration(self);
-        
+        if (had_error){
+            exit(65);
+        }
+
         Element element;
         if (stmt->accept == PrintStmtAccept){
             element.type = PRINT_STMT;
