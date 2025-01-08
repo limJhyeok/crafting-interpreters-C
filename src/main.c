@@ -941,14 +941,14 @@ void* InterpreterVisitAssignExpr(Visitor* self, Expr* expr){
 
 void* InterpreterVisitLogicalExpr(Visitor* self, Expr* expr){
     Logical* expr_logical = (Logical*)expr;
-    Object* left = evaluate(self, expr_logical->left);
+    Object* left = evaluate((Interpreter*)self, expr_logical->left);
 
     if (expr_logical->operator->type == OR){
         if (isTruthy(left)) return left;
     } else {
         if (!isTruthy(left)) return left;
     }
-    return evaluate(self, expr_logical->right);
+    return evaluate((Interpreter*)self, expr_logical->right);
 }
 
 
