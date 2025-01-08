@@ -241,10 +241,18 @@ typedef struct Var {
     Token* name;
 } Var;
 
+typedef struct Array Array;
+
+typedef struct Block {
+    Stmt base;
+    Array* statements;
+} Block;
+
 typedef struct StmtVisitor{
     void* (*visitExpressionStmt)(struct StmtVisitor* self, Stmt* stmt);
     void* (*visitPrintStmt)(struct StmtVisitor* self, Stmt* stmt);
     void* (*visitVarStmt)(struct StmtVisitor* self, Stmt* stmt);
+    void* (*visitBlockStmt)(struct StmtVisitor* self, Stmt* stmt);
 } StmtVisitor;
 
 // Statement - end
@@ -252,19 +260,25 @@ typedef struct StmtVisitor{
 void* PrintStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 void* ExpressionStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 void* VarStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
+void* BlockStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 
 Print* createPrintStmt(Expr* expression);
 Expression* createExpressionStmt(Expr* expressoin);
 Var* createVarStmt(Token* name, Expr* expression);
+Block* createBlockStmt(Array* statements);
+
+typedef struct Parser Parser;
+Array* block(Parser* self);
 
 void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt);
 void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt);
-void* InterpretervisitVarStmt(StmtVisitor* self, Stmt* stmt);
-
+void* InterpreterVisitVarStmt(StmtVisitor* self, Stmt* stmt);
+void* InterpreterVisitBlockStmt(StmtVisitor* self, Stmt* stmt);
 typedef enum {
     PRINT_STMT,
     EXPRESSION_STMT,
-    VAR_STMT
+    VAR_STMT,
+    BLOCK_STMT
 } ElementType;
 
 typedef struct Element {
@@ -273,6 +287,7 @@ typedef struct Element {
         Print* print_stmt;
         Expression* expr_stmt;
         Var* var_stmt;
+        Block* block_stmt;
     } data;
 } Element;
 
@@ -316,6 +331,7 @@ typedef struct Parser {
     Stmt* (*declaration)(struct Parser* self);
     Stmt* (*printStatement)(struct Parser*);
     Stmt* (*expressionStatement)(struct Parser*);
+    Stmt* (*blockStatement)(struct Parser*);
     ParseError* (*parserError)(struct Parser*, Token*, char*);
     void* (*synchronize)(struct Parser*);
     Array* (*parse)(struct Parser*);
@@ -341,6 +357,8 @@ Stmt* declaration(Parser* self);
 Stmt* statement(Parser* self);
 Stmt* printStatement(Parser* self);
 Stmt* expressionStatement(Parser* self);
+Stmt* blockStatement(Parser* self);
+
 ParseError* parserError(Parser* self,Token* token, char* message);
 void *synchronize(Parser* self);
 Array* parse(Parser* self);
@@ -357,9 +375,11 @@ typedef struct Environment{
     void* (*define)(struct Environment* self, char* name, Object* value);
     Object* (*get)(struct Environment* self, Token* name);
     void* (*assign)(struct Environment* self, Token* name, Object* value);
+    struct Environment* enclosing;
 } Environment;
 
 Environment* createEnvironment();
+Environment* createEnvironmentWithEnclosing(Environment* enclosing);
 
 void* define(Environment* self, char* name, Object* value);
 Object* get(Environment* self, Token* name);
@@ -383,6 +403,7 @@ typedef struct Interpreter {
     void (*execute)(struct Interpreter* self, Stmt* stmt);
     void (*interpret)(struct Interpreter* self, Array* array);
     void (*interpretExpr)(struct Interpreter* self, Expr* expr);
+    void (*executeBlock)(struct Interpreter* self, Array* statements, Environment environment);
 } Interpreter;
 
 typedef struct RuntimeError {
@@ -405,6 +426,8 @@ Object* evaluate(struct Interpreter* self, Expr* expr);
 void execute(struct Interpreter* self, Stmt* stmt);
 void interpret(struct Interpreter* self, Array* statements);
 void interpretExpr(struct Interpreter* self, Expr* expr);
+void executeBlock(Interpreter* self, Array* statements, Environment environment);
+
 char* stringify(Object object);
 
 int endsWith(char *c, size_t c_size, char *end, size_t end_size);
@@ -1062,6 +1085,8 @@ void interpret(struct Interpreter* self, Array* statements){
             stmt = (Stmt*)element->data.expr_stmt;
         } else if (element->type == VAR_STMT){
             stmt = (Stmt*)element->data.var_stmt;
+        } else if (element->type == BLOCK_STMT){
+            stmt = (Stmt*)element->data.block_stmt;
         }
         execute(self, stmt);
         if (runtime_error_flag){
@@ -1080,7 +1105,32 @@ void interpretExpr(struct Interpreter* self, Expr* expr){
     } else {
         printf("%s\n", stringify(*object));
     }
-};
+}
+
+void executeBlock(Interpreter* self, Array* statements, Environment environment){
+    Environment previous = self->environment;
+    self->environment = environment; 
+    for (int i = 0; i < statements->count; i++){
+        Element* element = getElement(statements, i);
+        Stmt* stmt = NULL;
+        if (element->type == PRINT_STMT){
+            stmt = (Stmt*)element->data.print_stmt;
+        } else if (element->type == EXPRESSION_STMT) {
+            stmt = (Stmt*)element->data.expr_stmt;
+        } else if (element->type == VAR_STMT){
+            stmt = (Stmt*)element->data.var_stmt;
+        } else if (element->type == BLOCK_STMT){
+            stmt = (Stmt*)element->data.block_stmt;
+        }
+        execute(self, stmt);
+    }
+
+    self->environment = previous;
+    if (runtime_error_flag){
+        exit(70);
+    }
+}
+
 
 char* stringify(Object object){
     if (object.value == NULL) return "nil";
@@ -1490,7 +1540,7 @@ Stmt* varDeclaration(Parser* self){
 
 Stmt* statement(Parser* self){
     if (match(self, (TokenType[]){PRINT}, 1)) return printStatement(self);
-
+    if (match(self, (TokenType[]){LEFT_BRACE}, 1)) return blockStatement(self);
     return expressionStatement(self);
 }
 
@@ -1504,6 +1554,11 @@ Stmt* expressionStatement(Parser *self){
     Expr* expr = expression(self);
     consume(self, SEMICOLON, "Expect ';' after expression.");
     return (Stmt*)createExpressionStmt(expr);
+}
+
+Stmt* blockStatement(Parser *self){
+    Array* stmt_array = block(self);
+    return (Stmt*)createBlockStmt(stmt_array);
 }
 
 ParseError* parserError(Parser* self,Token* token, char* message){
@@ -1552,9 +1607,12 @@ Array* parse(Parser* self){
         } else if (stmt->accept == VarStmtAccept){
             element.type = VAR_STMT;
             element.data.var_stmt = (Var*)(stmt);
-        } 
+        } else if (stmt->accept = BlockStmtAccept){
+            element.type = BLOCK_STMT;
+            element.data.block_stmt = (Block*)stmt;
+        }
         else {
-            fprintf(stderr, "Error: Unknown statements");
+            fprintf(stderr, "Error: Unknown statement");
             exit(65);
         }
         addElement(stmt_array, element);
@@ -1600,6 +1658,7 @@ Parser* createParser() {
         parser->declaration = declaration;
         parser->printStatement = printStatement;
         parser->expressionStatement = expressionStatement;
+        parser->blockStatement = blockStatement;
         parser->parserError = parserError;
         parser->synchronize = synchronize;
         parser->parse = parse;
@@ -1743,7 +1802,8 @@ Interpreter *createInterpreter(){
     interpreter->base.visitAssignExpr = InterpreterVisitAssignExpr;
     interpreter->stmt_visitor.visitExpressionStmt = InterpreterVisitExpressionStmt;
     interpreter->stmt_visitor.visitPrintStmt = InterpreterVisitPrintStmt;
-    interpreter->stmt_visitor.visitVarStmt = InterpretervisitVarStmt;
+    interpreter->stmt_visitor.visitVarStmt = InterpreterVisitVarStmt;
+    interpreter->stmt_visitor.visitBlockStmt = InterpreterVisitBlockStmt;
     interpreter->environment.get = get;
     interpreter->environment.define = define;
     interpreter->environment.assign = assign;
@@ -1795,8 +1855,9 @@ void* ExpressionStmtAccept(Stmt *self, StmtVisitor *stmt_visitor){
 void* VarStmtAccept(Stmt *self, StmtVisitor *stmt_visitor){
     stmt_visitor->visitVarStmt(stmt_visitor, self);
 }
-
-
+void* BlockStmtAccept(Stmt *self, StmtVisitor *stmt_visitor){
+    stmt_visitor->visitBlockStmt(stmt_visitor, self);
+}
 
 Print* createPrintStmt(Expr* expr){
     Print* print_stmt = (Print*)malloc(sizeof(Print));
@@ -1832,6 +1893,45 @@ Var* createVarStmt(Token* name, Expr* expression){
     var_stmt->initializer = expression;
     return var_stmt;
 }
+Block* createBlockStmt(Array* statements){
+    Block* block = (Block*)malloc(sizeof(Block));
+    block->base.accept = BlockStmtAccept;
+    block->statements = statements;
+    return block;
+}
+
+
+Array* block(Parser* self){
+    Array* stmt_array = createArray(INITIAL_LIST_SIZE);
+    if (!stmt_array){
+        fprintf(stderr, "Error: Initial memory allocation of Stmt list failed\n");
+        exit(70);
+    }
+    while (!check(self, RIGHT_BRACE) && !isAtEnd(self)){
+        Stmt* stmt = declaration(self);
+        Element element;
+        if (stmt->accept == PrintStmtAccept){
+            element.type = PRINT_STMT;
+            element.data.print_stmt = (Print*)stmt;
+        } else if (stmt->accept == ExpressionStmtAccept){
+            element.type = EXPRESSION_STMT;
+            element.data.expr_stmt = (Expression*)stmt;
+        } else if (stmt->accept == VarStmtAccept){
+            element.type = VAR_STMT;
+            element.data.var_stmt = (Var*)(stmt);
+        } else if (stmt->accept == BlockStmtAccept){
+            element.type = BLOCK_STMT;
+            element.data.block_stmt = (Block*)(stmt);
+        }
+        else {
+            fprintf(stderr, "Error: Unknown statement");
+            exit(65);
+        }
+        addElement(stmt_array, element);
+    }
+    consume(self, RIGHT_BRACE, "Expect '}' after block.");
+    return stmt_array;
+}
 
 void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt){
     Expression* expr_stmt = (Expression*)stmt;
@@ -1842,7 +1942,7 @@ void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt){
     return NULL;
 };
 
-void* InterpretervisitVarStmt(StmtVisitor* self, Stmt* stmt){
+void* InterpreterVisitVarStmt(StmtVisitor* self, Stmt* stmt){
     Object* value = {NULL};
     Expr* init = ((Var*)stmt)->initializer;
     size_t visitor_offset = offsetof(Interpreter, stmt_visitor);
@@ -1864,6 +1964,16 @@ void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt){
     printf("%s\n", stringify(*value));
     return NULL;
 }
+
+void* InterpreterVisitBlockStmt(StmtVisitor* self, Stmt* stmt){
+    Block* block_stmt = (Block*)stmt;
+    Array* statements = block_stmt->statements;
+    Environment* env = createEnvironment();
+    size_t offset = offsetof(Interpreter, stmt_visitor);
+    executeBlock((Interpreter*)((char*)self - offset), statements, *env);
+    return NULL;
+}
+
 
 
 Object* createObject(TokenType type,  const char* literal){
@@ -1980,8 +2090,18 @@ void releaseHashTable(Entry* hashTable[]) {
 
 Environment* createEnvironment(){
     Environment* env = (Environment*)malloc(sizeof(Environment));
+    for (int i = 0; i < TABLE_SIZE; i++) {
+        env->values[i] = NULL; // 초기화
+    }    
     env->define = define;
     env->get = get;
+    env->enclosing = NULL;
+    return env;
+}
+
+Environment* createEnvironmentWithEnclosing(Environment* enclosing){
+    Environment* env = createEnvironment();
+    env->enclosing = enclosing;
     return env;
 }
 
@@ -1991,8 +2111,10 @@ void* define(Environment* self, char* name, Object* value){
 }
 
 Object* get(Environment* self, Token* name){
+
     Object* object = find(self->values, name->lexeme);
     if (object) return object;
+    if (self->enclosing != NULL) return find(self->enclosing->values, name->lexeme);
 
     runtime_error_flag = 1;
     char buffer[MAX_TOKEN_LEXEME_SIZE + 30] = "Undefined variable '"; 
@@ -2004,6 +2126,10 @@ Object* get(Environment* self, Token* name){
 void* assign(Environment* self, Token* name, Object* value){
     if (find(self->values, name->lexeme)){
         insert(self->values, name->lexeme, value);
+        return NULL;
+    }
+    if (self->enclosing != NULL){
+        insert(self->enclosing->values, name->lexeme, value);
         return NULL;
     }
     char buffer[MAX_TOKEN_LEXEME_SIZE + 30] = "Undefined variable '"; 
