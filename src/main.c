@@ -398,12 +398,12 @@ void error(Token* token, char* message);
 typedef struct Interpreter {
     Visitor base;
     StmtVisitor stmt_visitor;
-    Environment environment;
+    Environment* environment;
     Object* (*evaluate)(struct Interpreter* self, Expr* expr);
     void (*execute)(struct Interpreter* self, Stmt* stmt);
     void (*interpret)(struct Interpreter* self, Array* array);
     void (*interpretExpr)(struct Interpreter* self, Expr* expr);
-    void (*executeBlock)(struct Interpreter* self, Array* statements, Environment environment);
+    void (*executeBlock)(struct Interpreter* self, Array* statements, Environment* environment);
 } Interpreter;
 
 typedef struct RuntimeError {
@@ -426,7 +426,7 @@ Object* evaluate(struct Interpreter* self, Expr* expr);
 void execute(struct Interpreter* self, Stmt* stmt);
 void interpret(struct Interpreter* self, Array* statements);
 void interpretExpr(struct Interpreter* self, Expr* expr);
-void executeBlock(Interpreter* self, Array* statements, Environment environment);
+void executeBlock(Interpreter* self, Array* statements, Environment* environment);
 
 char* stringify(Object object);
 
@@ -567,7 +567,7 @@ int main(int argc, char *argv[]) {
 
             free(parser);
             releaseArray(statements);
-            releaseHashTable(interpreter->environment.values);
+            releaseHashTable(interpreter->environment->values);
             free(interpreter);
             releaseTokenList();
         }
@@ -889,15 +889,23 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr){
 }
 
 void* InterpreterVisitVariableExpr(Visitor* self, Expr* expr){
-    size_t offset = offsetof(Interpreter, environment);
-    Environment* environment = (Environment*)((char*)self + offset);
+    size_t base_offset = offsetof(Interpreter, base);
+    Interpreter* interpreter = (Interpreter*)((char*)self - base_offset);
+    Environment* environment = interpreter->environment;
+    // size_t offset = offsetof(Interpreter, environment);
+    // Environment* environment = (Environment*)((char*)self + offset);    
     return environment->get(environment, ((Variable*)expr)->name);
 }
 
 void* InterpreterVisitAssignExpr(Visitor* self, Expr* expr){
     Assign* expr_assign = (Assign*)expr;
-    size_t offset = offsetof(Interpreter, environment);
-    Environment* environment = (Environment*)((char*)self + offset);
+
+    size_t base_offset = offsetof(Interpreter, base);
+    Interpreter* interpreter = (Interpreter*)((char*)self - base_offset);
+    Environment* environment = interpreter->environment;
+    
+    // size_t offset = offsetof(Interpreter, environment);
+    // Environment* environment = (Environment*)((char*)self + offset);
 
     Object* value = evaluate((Interpreter*)self, expr_assign->value);
 
@@ -1035,7 +1043,6 @@ void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr){
             runtime_error_flag = 1;
             runtime_error = createRuntimeError(*expr_binary->operator,
                                              "Operands must be two numbers or two strings.");
-            // throw_exception(70, "Operands must be two numbers or two strings.");
 
             return runtime_error;
         case SLASH:
@@ -1093,7 +1100,6 @@ void interpret(struct Interpreter* self, Array* statements){
             exit(70);
         }
     }
-
 }
 
 void interpretExpr(struct Interpreter* self, Expr* expr){
@@ -1107,9 +1113,10 @@ void interpretExpr(struct Interpreter* self, Expr* expr){
     }
 }
 
-void executeBlock(Interpreter* self, Array* statements, Environment environment){
-    Environment previous = self->environment;
-    self->environment = environment; 
+void executeBlock(Interpreter* self, Array* statements, Environment* env){
+    Environment* previous = self->environment;
+    self->environment = env;
+
     for (int i = 0; i < statements->count; i++){
         Element* element = getElement(statements, i);
         Stmt* stmt = NULL;
@@ -1804,13 +1811,16 @@ Interpreter *createInterpreter(){
     interpreter->stmt_visitor.visitPrintStmt = InterpreterVisitPrintStmt;
     interpreter->stmt_visitor.visitVarStmt = InterpreterVisitVarStmt;
     interpreter->stmt_visitor.visitBlockStmt = InterpreterVisitBlockStmt;
-    interpreter->environment.get = get;
-    interpreter->environment.define = define;
-    interpreter->environment.assign = assign;
+    
+    interpreter->environment = createEnvironment();
+    // interpreter->environment.get = get;
+    // interpreter->environment.define = define;
+    // interpreter->environment.assign = assign;
     interpreter->evaluate = evaluate;
     interpreter->execute = execute;
     interpreter->interpret = interpret;
     interpreter->interpretExpr = interpretExpr;
+    interpreter->executeBlock = executeBlock;
     return interpreter;
 }
 
@@ -1948,7 +1958,8 @@ void* InterpreterVisitVarStmt(StmtVisitor* self, Stmt* stmt){
     size_t visitor_offset = offsetof(Interpreter, stmt_visitor);
     size_t env_offset = offsetof(Interpreter, environment);
     Interpreter* interpreter = (Interpreter*)((char*)self - visitor_offset); 
-    Environment* environment = (Environment*)((char*)interpreter + env_offset);
+    Environment* environment = interpreter->environment;
+    // Environment* environment = (Environment*)((char*)interpreter + env_offset);
     if (init){
         value = evaluate(interpreter, init);
     }
@@ -1968,9 +1979,11 @@ void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt){
 void* InterpreterVisitBlockStmt(StmtVisitor* self, Stmt* stmt){
     Block* block_stmt = (Block*)stmt;
     Array* statements = block_stmt->statements;
-    Environment* env = createEnvironment();
+
     size_t offset = offsetof(Interpreter, stmt_visitor);
-    executeBlock((Interpreter*)((char*)self - offset), statements, *env);
+    Interpreter* interpreter = (Interpreter*)((char*)self - offset); 
+    Environment* env = createEnvironmentWithEnclosing(interpreter->environment);
+    executeBlock(interpreter, statements, env);
     return NULL;
 }
 
@@ -2094,6 +2107,7 @@ Environment* createEnvironment(){
         env->values[i] = NULL; // 초기화
     }    
     env->define = define;
+    env->assign = assign;
     env->get = get;
     env->enclosing = NULL;
     return env;
@@ -2114,7 +2128,13 @@ Object* get(Environment* self, Token* name){
 
     Object* object = find(self->values, name->lexeme);
     if (object) return object;
-    if (self->enclosing != NULL) return find(self->enclosing->values, name->lexeme);
+    
+    while (self->enclosing != NULL){
+        Object* object = find(self->enclosing->values, name->lexeme);
+        if (object) return object;
+        self = self->enclosing;
+    }
+    // if (self->enclosing != NULL) return find(self->enclosing->values, name->lexeme);
 
     runtime_error_flag = 1;
     char buffer[MAX_TOKEN_LEXEME_SIZE + 30] = "Undefined variable '"; 
