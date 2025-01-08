@@ -149,6 +149,7 @@ typedef struct Visitor {
     void *(*visitLiteralExpr)(struct Visitor *self, Expr *expr);
     void *(*visitVariableExpr)(struct Visitor *self, Expr *expr);
     void *(*visitAssignExpr)(struct Visitor *self, Expr *expr);
+    void *(*visitLogicalExpr)(struct Visitor *self, Expr *expr);    
 } Visitor;
 
 typedef struct ExprBinary
@@ -191,14 +192,21 @@ typedef struct Assign {
     Expr* value;
 } Assign;
 
+typedef struct Logical {
+    Expr base;
+    Expr* left;
+    Token* operator;
+    Expr* right;
+} Logical;
+
 
 void* ExprBinaryAccept(Expr *self, Visitor *visitor);
 void* ExprUnaryAccept(Expr *self, Visitor *visitor);
 void* ExprGroupingAccept(Expr *self, Visitor *visitor);
 void* ExprLiteralAccept(Expr *self, Visitor *visitor);
 void* ExprVariableAccept(Expr *self, Visitor *visitor);
-void *ExprAssignAccept(Expr *self, Visitor *visitor);
-
+void* ExprAssignAccept(Expr *self, Visitor *visitor);
+void* ExprLogicalAccept(Expr *self, Visitor *visitor);
 
 typedef struct AstPrinter{
     Visitor base;
@@ -285,6 +293,7 @@ void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt);
 void* InterpreterVisitVarStmt(StmtVisitor* self, Stmt* stmt);
 void* InterpreterVisitBlockStmt(StmtVisitor* self, Stmt* stmt);
 void* InterpreterVisitIfStmt(StmtVisitor* self, Stmt* stmt);
+
 typedef enum {
     PRINT_STMT,
     EXPRESSION_STMT,
@@ -364,6 +373,8 @@ Expr* term(Parser* self);
 Expr* comparison(Parser* self);
 Expr* assignment(Parser *self);
 Expr* equality(Parser *self);
+Expr* or(Parser *self);
+Expr* and(Parser *self);
 Expr* expression(Parser* self);
 Stmt* varDeclaration(Parser* self);
 Stmt* declaration(Parser* self);
@@ -436,6 +447,7 @@ void* InterpreterVisitUnaryExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitBinaryExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitVariableExpr(Visitor* self, Expr* expr);
 void* InterpreterVisitAssignExpr(Visitor* self, Expr* expr);
+void* InterpreterVisitLogicalExpr(Visitor* self, Expr* expr);
 Object* evaluate(struct Interpreter* self, Expr* expr);
 void execute(struct Interpreter* self, Stmt* stmt);
 void interpret(struct Interpreter* self, Array* statements);
@@ -926,6 +938,19 @@ void* InterpreterVisitAssignExpr(Visitor* self, Expr* expr){
     environment->assign(environment, expr_assign->name, value);
     return value;
 }
+
+void* InterpreterVisitLogicalExpr(Visitor* self, Expr* expr){
+    Logical* expr_logical = (Logical*)expr;
+    Object* left = evaluate(self, expr_logical->left);
+
+    if (expr_logical->operator->type == OR){
+        if (isTruthy(left)) return left;
+    } else {
+        if (!isTruthy(left)) return left;
+    }
+    return evaluate(self, expr_logical->right);
+}
+
 
 RuntimeError* checkNumberOperand(Token operator, Object operand){
     if (operand.type == NUMBER) return NULL;
@@ -1498,7 +1523,8 @@ Expr* comparison(Parser* self){
 }
 
 Expr* assignment(Parser *self){
-    Expr* expr = equality(self);
+    // Expr* expr = equality(self);
+    Expr* expr = or(self);
     if (match(self, (TokenType[]){EQUAL}, 1)){
         Token* equals = previous(self);
         Expr* value = assignment(self);
@@ -1529,6 +1555,35 @@ Expr* equality(Parser *self){
         expr_binary->operator = operator;
         expr_binary->right = right;
         expr = (Expr*) expr_binary;
+    }
+    return expr;
+}
+Expr* or(Parser *self){
+    Expr* expr = and(self);
+    while (match(self, (TokenType[]){OR}, 1)){
+        Token* operator = previous(self);
+        Expr* right = and(self);
+        Logical* logical_expr = (Logical*)malloc(sizeof(Logical));
+        logical_expr->base.accept = ExprLogicalAccept;
+        logical_expr->left = expr;
+        logical_expr->operator = operator;
+        logical_expr->right = right;
+        expr = (Expr*)logical_expr;
+    }
+    return expr;
+}
+
+Expr* and(Parser *self){
+    Expr* expr = equality(self);
+    while (match(self, (TokenType[]){AND}, 1)){
+        Token* operator = previous(self);
+        Expr* right = equality(self);
+        Logical* logical_expr = (Logical*)malloc(sizeof(Logical));
+        logical_expr->base.accept = ExprLogicalAccept;
+        logical_expr->left = expr;
+        logical_expr->operator = operator;
+        logical_expr->right = right;
+        expr = (Expr*)logical_expr;
     }
     return expr;
 }
@@ -1752,7 +1807,9 @@ void *ExprAssignAccept(Expr *self, Visitor *visitor){
     visitor->visitAssignExpr(visitor, self);
 }
 
-
+void *ExprLogicalAccept(Expr* self, Visitor *visitor){
+    visitor->visitLogicalExpr(visitor, self);
+}
 
 void report(int line, char* where, char* message){
     // printf("[line %d] Error %s: %s\n", line, where, message);
@@ -1844,6 +1901,7 @@ Interpreter *createInterpreter(){
     interpreter->base.visitUnaryExpr = InterpreterVisitUnaryExpr;
     interpreter->base.visitVariableExpr = InterpreterVisitVariableExpr;
     interpreter->base.visitAssignExpr = InterpreterVisitAssignExpr;
+    interpreter->base.visitLogicalExpr = InterpreterVisitLogicalExpr;
     interpreter->stmt_visitor.visitExpressionStmt = InterpreterVisitExpressionStmt;
     interpreter->stmt_visitor.visitPrintStmt = InterpreterVisitPrintStmt;
     interpreter->stmt_visitor.visitVarStmt = InterpreterVisitVarStmt;

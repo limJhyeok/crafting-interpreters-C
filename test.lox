@@ -1,5 +1,5 @@
 var stage = "unknown";
-var age = 50;
+var age = 23;
 if (age < 18) { stage = "child"; }
 if (age >= 18) { stage = "adult"; }
 print stage;
