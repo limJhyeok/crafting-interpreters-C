@@ -1,6 +1,9 @@
-var baz = (91 * 16) - 61;
-{
-    var world = "quz" + "89";
-    print world;
-}
-print baz;
+var stage = "unknown";
+var age = 50;
+if (age < 18) { stage = "child"; }
+if (age >= 18) { stage = "adult"; }
+print stage;
+
+var isAdult = age >= 18;
+if (isAdult) { print "eligible for voting: true"; }
+if (!isAdult) { print "eligible for voting: false"; }
