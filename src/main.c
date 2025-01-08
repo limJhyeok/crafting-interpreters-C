@@ -2271,10 +2271,20 @@ void* assign(Environment* self, Token* name, Object* value){
         insert(self->values, name->lexeme, value);
         return NULL;
     }
-    if (self->enclosing != NULL){
-        insert(self->enclosing->values, name->lexeme, value);
-        return NULL;
+    while (self->enclosing != NULL){
+        Object* object = find(self->enclosing->values, name->lexeme);
+        if (object) {
+            insert(self->enclosing->values, name->lexeme, value);
+            return NULL;
+        }
+        self = self->enclosing;
     }
+
+    // if (self->enclosing != NULL){
+    //     insert(self->enclosing->values, name->lexeme, value);
+    //     return NULL;
+    // }
+
     char buffer[MAX_TOKEN_LEXEME_SIZE + 30] = "Undefined variable '"; 
     strcat(buffer, name->lexeme);
     strcat(buffer, "'.");
