@@ -256,6 +256,12 @@ typedef struct If {
     Stmt* elseBranch;
 } If;
 
+typedef struct While {
+    Stmt base;
+    Expr* condition;
+    Stmt* body;
+} While;
+
 typedef struct Array Array;
 
 typedef struct Block {
@@ -269,6 +275,7 @@ typedef struct StmtVisitor{
     void* (*visitVarStmt)(struct StmtVisitor* self, Stmt* stmt);
     void* (*visitBlockStmt)(struct StmtVisitor* self, Stmt* stmt);
     void* (*visitIfStmt)(struct StmtVisitor* self, Stmt* stmt);
+    void* (*visitWhileStmt)(struct StmtVisitor* self, Stmt* stmt);
 } StmtVisitor;
 
 // Statement - end
@@ -278,12 +285,14 @@ void* ExpressionStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 void* VarStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 void* BlockStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 void* IfStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
+void* WhileStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 
 Print* createPrintStmt(Expr* expression);
 Expression* createExpressionStmt(Expr* expressoin);
 Var* createVarStmt(Token* name, Expr* expression);
 Block* createBlockStmt(Array* statements);
 If* createIfStmt(Expr* condition, Stmt* thenBranch, Stmt* elseBranch);
+While* createWhileStmt(Expr* condition, Stmt* body);
 
 typedef struct Parser Parser;
 Array* block(Parser* self);
@@ -293,13 +302,15 @@ void* InterpreterVisitPrintStmt(StmtVisitor *self, Stmt* stmt);
 void* InterpreterVisitVarStmt(StmtVisitor* self, Stmt* stmt);
 void* InterpreterVisitBlockStmt(StmtVisitor* self, Stmt* stmt);
 void* InterpreterVisitIfStmt(StmtVisitor* self, Stmt* stmt);
+void* InterpreterVisitWhileStmt(StmtVisitor* self, Stmt* stmt);
 
 typedef enum {
     PRINT_STMT,
     EXPRESSION_STMT,
     VAR_STMT,
     BLOCK_STMT,
-    IF_STMT
+    IF_STMT,
+    WHILE_STMT
 } ElementType;
 
 typedef struct Element {
@@ -310,6 +321,7 @@ typedef struct Element {
         Var* var_stmt;
         Block* block_stmt;
         If* if_stmt;
+        While* while_stmt;
     } data;
 } Element;
 
@@ -381,6 +393,7 @@ Stmt* declaration(Parser* self);
 Stmt* statement(Parser* self);
 Stmt* printStatement(Parser* self);
 Stmt* ifStatement(Parser* self);
+Stmt* whileStatement(Parser* self);
 Stmt* expressionStatement(Parser* self);
 Stmt* blockStatement(Parser* self);
 
@@ -1135,6 +1148,8 @@ void interpret(struct Interpreter* self, Array* statements){
             stmt = (Stmt*)element->data.block_stmt;
         } else if (element->type == IF_STMT){
             stmt = (Stmt*)element->data.if_stmt;
+        } else if (element->type == WHILE_STMT){
+            stmt = (Stmt*)element->data.while_stmt;
         }
         execute(self, stmt);
         if (runtime_error_flag){
@@ -1621,6 +1636,7 @@ Stmt* varDeclaration(Parser* self){
 Stmt* statement(Parser* self){
     if (match(self, (TokenType[]){IF}, 1)) return ifStatement(self);
     if (match(self, (TokenType[]){PRINT}, 1)) return printStatement(self);
+    if (match(self, (TokenType[]){WHILE}, 1)) return whileStatement(self);
     if (match(self, (TokenType[]){LEFT_BRACE}, 1)) return blockStatement(self);
     return expressionStatement(self);
 }
@@ -1654,6 +1670,15 @@ Stmt* ifStatement(Parser* self){
 
     If* if_stmt = createIfStmt(condition, thenBranch, elseBranch);
     return (Stmt*)if_stmt;
+}
+
+Stmt* whileStatement(Parser* self){
+    consume(self, LEFT_PAREN, "Expect '(' after 'while'.");
+    Expr* condition = expression(self);
+    consume(self, RIGHT_PAREN, "Expect ')' after condition.");
+    Stmt* body = statement(self);
+    While* while_stmt = createWhileStmt(condition, body);
+    return (Stmt*)while_stmt;
 }
 
 
@@ -1709,6 +1734,9 @@ Array* parse(Parser* self){
         } else if (stmt->accept == IfStmtAccept){
             element.type = IF_STMT;
             element.data.if_stmt = (If*)stmt;
+        } else if (stmt->accept == WhileStmtAccept){
+            element.type = WHILE_STMT;
+            element.data.while_stmt = (While*)stmt;
         }
         else {
             fprintf(stderr, "Error: Unknown statement");
@@ -1907,6 +1935,7 @@ Interpreter *createInterpreter(){
     interpreter->stmt_visitor.visitVarStmt = InterpreterVisitVarStmt;
     interpreter->stmt_visitor.visitBlockStmt = InterpreterVisitBlockStmt;
     interpreter->stmt_visitor.visitIfStmt = InterpreterVisitIfStmt;
+    interpreter->stmt_visitor.visitWhileStmt = InterpreterVisitWhileStmt;
     interpreter->environment = createEnvironment();
     // interpreter->environment.get = get;
     // interpreter->environment.define = define;
@@ -1968,6 +1997,10 @@ void* IfStmtAccept(Stmt *self, StmtVisitor *stmt_visitor){
     stmt_visitor->visitIfStmt(stmt_visitor, self);
 }
 
+void* WhileStmtAccept(Stmt *self, StmtVisitor *stmt_visitor){
+    stmt_visitor->visitWhileStmt(stmt_visitor, self);
+}
+
 Print* createPrintStmt(Expr* expr){
     Print* print_stmt = (Print*)malloc(sizeof(Print));
     if (!print_stmt){
@@ -2018,6 +2051,14 @@ If* createIfStmt(Expr* condition, Stmt* thenBranch, Stmt* elseBranch){
     return if_stmt;
 }
 
+While* createWhileStmt(Expr* condition, Stmt* body){
+    While* while_stmt = (While*)malloc(sizeof(While));
+    while_stmt->base.accept = WhileStmtAccept;
+    while_stmt->condition = condition;
+    while_stmt->body = body;
+    return while_stmt;
+}
+
 
 Array* block(Parser* self){
     Array* stmt_array = createArray(INITIAL_LIST_SIZE);
@@ -2043,6 +2084,9 @@ Array* block(Parser* self){
         } else if (stmt->accept == IfStmtAccept){
             element.type = IF_STMT;
             element.data.if_stmt = (If*)stmt;
+        } else if (stmt->accept == WhileStmtAccept){
+            element.type = WHILE_STMT;
+            element.data.while_stmt = (While*)stmt;
         }
         else {
             fprintf(stderr, "Error: Unknown statement");
@@ -2110,7 +2154,16 @@ void* InterpreterVisitIfStmt(StmtVisitor* self, Stmt* stmt){
     return NULL;
 }
 
+void* InterpreterVisitWhileStmt(StmtVisitor* self, Stmt* stmt){
+    While* while_stmt = (While*)stmt;
+    size_t visitor_offset = offsetof(Interpreter, stmt_visitor);
+    Interpreter* interpreter = (Interpreter*)((char*)self - visitor_offset);
 
+    while (isTruthy(evaluate(interpreter, while_stmt->condition))){
+        execute(interpreter, while_stmt->body);
+    }
+    return NULL;
+}
 
 Object* createObject(TokenType type,  const char* literal){
     Object* object = (Object*)malloc(sizeof(Object));
