@@ -2742,7 +2742,7 @@ Object* nativeClockFunctionCall(void* self, Interpreter* interpreter, Array* arg
     double now = (double)time(NULL);
 
     char* buffer = (char*)malloc(sizeof(32));
-    snprintf(buffer, 32, "%.6g", now);
+    snprintf(buffer, 32, "%.0f", now);
     
     return createObject(NUMBER, buffer);
 }
