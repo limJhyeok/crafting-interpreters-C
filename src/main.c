@@ -1304,6 +1304,10 @@ char* stringify(Object object){
     if (object.type == TRUE || object.type == FALSE) {
         return ((BoolValue*)object.value)->boolean != 0 ? "true" : "false";
     }
+    if (object.type == FUN){
+        LoxFunction* lox_function = (LoxFunction*)object.value;
+        return lox_function->toString(lox_function);
+    }
     exit(70);
     // fprintf(stderr, "Unknown type error\n");
     // exit(EXIT_FAILURE);
@@ -2726,12 +2730,16 @@ int arity(LoxCallable* self){
     return ((LoxFunction*)self)->declaration->params->count;
 }
 
-char* toString(LoxFunction* self){
-    return NULL;
-    // char buffer[MAX_TOKEN_LEXEME_SIZE + 20] = "<fn ";
-    // strcat(buffer, self->declaration->name->lexeme);
-    // strcat(buffer, ">");
-    // return buffer;
+char* toString(LoxFunction* self) {
+    char* buffer = (char*)malloc(MAX_TOKEN_LEXEME_SIZE + 20);  // 충분한 크기로 할당
+    if (buffer == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    snprintf(buffer, MAX_TOKEN_LEXEME_SIZE + 20, "<fn %s>", self->declaration->name->lexeme);
+
+    return buffer;  // 할당된 메모리 주소를 반환
 }
 
 
