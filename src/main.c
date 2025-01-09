@@ -1079,7 +1079,7 @@ Object* quotientOperation(Object* left, Object* right){
     double right_value = (((NumberValue*)right->value)->number);
     double result = left_value / right_value;
     char* buffer = (char*)malloc(sizeof(32));
-    snprintf(buffer, 32, "%.6g", result);
+    snprintf(buffer, 32, "%.0f", result);
     return createObject(NUMBER, buffer);
 };
 Object* multiplyOperation(Object* left, Object* right){
@@ -1087,7 +1087,7 @@ Object* multiplyOperation(Object* left, Object* right){
     double right_value = (((NumberValue*)right->value)->number);
     double result = left_value * right_value;
     char* buffer = (char*)malloc(sizeof(32));
-    snprintf(buffer, 32, "%.6g", result);
+    snprintf(buffer, 32, "%.0f", result);
     return createObject(NUMBER, buffer);
 };
 
@@ -1097,7 +1097,7 @@ Object* plusOperation(Object* left, Object* right){
         double right_value = (((NumberValue*)right->value)->number);
         double result = left_value + right_value;
         char* buffer = (char*)malloc(sizeof(32));
-        snprintf(buffer, 32, "%.6g", result);
+        snprintf(buffer, 32, "%.0f", result);
         return createObject(NUMBER, buffer);    
     }
     if (left->type == STRING && right->type == STRING){
