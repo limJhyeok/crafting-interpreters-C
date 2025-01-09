@@ -1295,7 +1295,7 @@ char* stringify(Object object){
     if (object.type == NUMBER){
         double number = (((NumberValue*)object.value)->number);
         char* buffer = (char*)malloc(32);
-        snprintf(buffer, 32, "%.6g", number);
+        snprintf(buffer, 32, "%.0f", number);
         return buffer;
     }
     if (object.type == STRING) {
@@ -2739,10 +2739,10 @@ int nativeClockArity(LoxCallable* self){
     return 0;
 }
 Object* nativeClockFunctionCall(void* self, Interpreter* interpreter, Array* arguments){
-    double now = (double)time(NULL);
+    time_t now = time(NULL);
 
     char* buffer = (char*)malloc(sizeof(32));
-    snprintf(buffer, 32, "%.0f", now);
+    snprintf(buffer, 32, "%.ld", now);
     
     return createObject(NUMBER, buffer);
 }
