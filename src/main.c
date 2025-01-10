@@ -1829,6 +1829,9 @@ Stmt* forStatement(Parser *self){
     if (increment != NULL){
         Array* stmt_array = createArray(INITIAL_LIST_SIZE);
         Element element;
+        if (had_error){
+            exit(65);
+        }
         if (body->accept == PrintStmtAccept){
             element.type = PRINT_STMT;
             element.data.print_stmt = (Print*)body;
@@ -1877,6 +1880,9 @@ Stmt* forStatement(Parser *self){
     if (initilizer != NULL){
         Array* stmt_array = createArray(INITIAL_LIST_SIZE);
         Element element;
+        if (had_error){
+            exit(65);
+        }
         if (initilizer->accept == PrintStmtAccept){
             element.type = PRINT_STMT;
             element.data.print_stmt = (Print*)initilizer;
@@ -2141,8 +2147,8 @@ void *ExprCallAccept(Expr* self, Visitor *visitor){
 
 
 void report(int line, char* where, char* message){
-    printf("[line %d] Error %s: %s\n", line, where, message);
-    had_error = 1;
+    // printf("[line %d] Error %s: %s\n", line, where, message);
+    // had_error = 1;
 }
 
 void error(Token* token, char* message) {
