@@ -4,6 +4,7 @@
 #include <malloc.h>
 #include <stddef.h> // offsetof(relative memory adress in struct)
 #include <time.h>
+#include <setjmp.h> // try-catch
 
 // Token
 #define N_RESERVED_WORD 16
@@ -15,6 +16,8 @@
 // Hash table
 #define TABLE_SIZE 100 
 #define KEY_SIZE 50
+
+jmp_buf jump_buffer;
 
 
 typedef enum TokenType {
@@ -287,6 +290,14 @@ typedef struct Function {
     Array* body;
 } Function;
 
+typedef struct Return {
+    Stmt base;
+    Token* keyword;
+    Expr* value;
+} Return;
+
+Object* global_return_value = NULL;
+
 typedef struct StmtVisitor{
     void* (*visitExpressionStmt)(struct StmtVisitor* self, Stmt* stmt);
     void* (*visitPrintStmt)(struct StmtVisitor* self, Stmt* stmt);
@@ -295,6 +306,7 @@ typedef struct StmtVisitor{
     void* (*visitIfStmt)(struct StmtVisitor* self, Stmt* stmt);
     void* (*visitWhileStmt)(struct StmtVisitor* self, Stmt* stmt);
     void* (*visitFunctionStmt)(struct StmtVisitor* self, Stmt* stmt);
+    void* (*visitReturnStmt)(struct StmtVisitor* self, Stmt* stmt);
 } StmtVisitor;
 
 // Statement - end
@@ -306,6 +318,7 @@ void* BlockStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 void* IfStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 void* WhileStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 void* FunctionStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
+void* ReturnStmtAccept(Stmt *self, StmtVisitor *stmt_visitor);
 
 Print* createPrintStmt(Expr* expression);
 Expression* createExpressionStmt(Expr* expressoin);
@@ -314,6 +327,7 @@ Block* createBlockStmt(Array* statements);
 If* createIfStmt(Expr* condition, Stmt* thenBranch, Stmt* elseBranch);
 While* createWhileStmt(Expr* condition, Stmt* body);
 Function* createFunctionStmt(Token* name, Array* params, Array* body);
+Return* createReturnStmt(Token* keyword, Expr* value);
 
 typedef struct Parser Parser;
 Array* block(Parser* self);
@@ -325,6 +339,7 @@ void* InterpreterVisitBlockStmt(StmtVisitor* self, Stmt* stmt);
 void* InterpreterVisitIfStmt(StmtVisitor* self, Stmt* stmt);
 void* InterpreterVisitWhileStmt(StmtVisitor* self, Stmt* stmt);
 void* InterpreterVisitFunctionStmt(StmtVisitor* self, Stmt* stmt);
+void* InterpreterVisitReturnStmt(StmtVisitor* self, Stmt* stmt);
 
 typedef enum {
     TOKEN,
@@ -335,7 +350,8 @@ typedef enum {
     BLOCK_STMT,
     IF_STMT,
     WHILE_STMT,
-    FUNCTION_STMT
+    FUNCTION_STMT,
+    RETURN_STMT
 } ElementType;
 
 typedef struct Element {
@@ -350,6 +366,7 @@ typedef struct Element {
         If* if_stmt;
         While* while_stmt;
         Function* function_stmt;
+        Return* return_stmt;
     } data;
 } Element;
 
@@ -428,6 +445,7 @@ Stmt* forStatement(Parser* self);
 Stmt* expressionStatement(Parser* self);
 Stmt* blockStatement(Parser* self);
 Stmt* functionStatement(Parser* self, char* kind);
+Stmt* returnStatement(Parser* self);
 
 ParseError* parserError(Parser* self,Token* token, char* message);
 void *synchronize(Parser* self);
@@ -1025,7 +1043,6 @@ void* InterpreterVisitLogicalExpr(Visitor* self, Expr* expr){
 }
 
 void* InterpreterVisitCallExpr(Visitor* self, Expr* expr){
-    // TODO: 보충
     Call* expr_call = (Call*)expr;
     Object* callee = evaluate((Interpreter*)self, expr_call->callee);
 
@@ -1232,6 +1249,8 @@ void interpret(struct Interpreter* self, Array* statements){
             stmt = (Stmt*)element->data.while_stmt;
         } else if (element->type == FUNCTION_STMT){
             stmt = (Stmt*)element->data.function_stmt;
+        } else if (element->type == RETURN_STMT){
+            stmt = (Stmt*)element->data.return_stmt;
         }
         execute(self, stmt);
         if (runtime_error_flag){
@@ -1272,6 +1291,8 @@ void executeBlock(Interpreter* self, Array* statements, Environment* env){
             stmt = (Stmt*)element->data.while_stmt;
         } else if (element->type == FUNCTION_STMT){
             stmt = (Stmt*)element->data.function_stmt;
+        } else if (element->type == RETURN_STMT){
+            stmt = (Stmt*)element->data.return_stmt;
         }
         execute(self, stmt);
     }
@@ -1760,6 +1781,7 @@ Stmt* statement(Parser* self){
     if (match(self, (TokenType[]){FOR}, 1)) return forStatement(self);
     if (match(self, (TokenType[]){IF}, 1)) return ifStatement(self);
     if (match(self, (TokenType[]){PRINT}, 1)) return printStatement(self);
+    if (match(self, (TokenType[]){RETURN}, 1)) return returnStatement(self);
     if (match(self, (TokenType[]){WHILE}, 1)) return whileStatement(self);
     if (match(self, (TokenType[]){LEFT_BRACE}, 1)) return blockStatement(self);
     return expressionStatement(self);
@@ -1853,6 +1875,9 @@ Stmt* forStatement(Parser *self){
         } else if (body->accept == FunctionStmtAccept){
             element.type = FUNCTION_STMT;
             element.data.function_stmt = (Function*)body;
+        } else if (body->accept == ReturnStmtAccept){
+            element.type = RETURN_STMT;
+            element.data.return_stmt = (Return*)body;
         }
         else {
             fprintf(stderr, "Error: Unknown statement");
@@ -1904,6 +1929,9 @@ Stmt* forStatement(Parser *self){
         } else if (body->accept == FunctionStmtAccept){
             element.type = FUNCTION_STMT;
             element.data.function_stmt = (Function*)body;
+        } else if (body->accept == ReturnStmtAccept){
+            element.type = RETURN_STMT;
+            element.data.return_stmt = (Return*)body;
         }
         else {
             fprintf(stderr, "Error: Unknown statement");
@@ -1933,6 +1961,9 @@ Stmt* forStatement(Parser *self){
         } else if (body->accept == FunctionStmtAccept){
             element.type = FUNCTION_STMT;
             element.data.function_stmt = (Function*)body;
+        } else if (body->accept == ReturnStmtAccept){
+            element.type = RETURN_STMT;
+            element.data.return_stmt = (Return*)body;
         }
         else {
             fprintf(stderr, "Error: Unknown statement");
@@ -1977,6 +2008,14 @@ Stmt* functionStatement(Parser* self, char* kind){
 
     Array* body = block(self);
     return (Stmt*)createFunctionStmt(name, parameters, body);   
+}
+
+Stmt* returnStatement(Parser* self){
+    Token* keyword = previous(self);
+    Expr* value = NULL;
+    if (!check(self, SEMICOLON)) value = expression(self);
+    consume(self, SEMICOLON, "Expect ';' after return value.");
+    return (Stmt*)createReturnStmt(keyword, value);
 }
 
 ParseError* parserError(Parser* self,Token* token, char* message){
@@ -2039,7 +2078,11 @@ Array* parse(Parser* self){
         } else if (stmt->accept == FunctionStmtAccept){
             element.type = FUNCTION_STMT;
             element.data.function_stmt = (Function*)stmt;
+        } else if (stmt->accept == ReturnStmtAccept){
+            element.type = RETURN_STMT;
+            element.data.return_stmt = (Return*)stmt;
         }
+
         else {
             fprintf(stderr, "Error: Unknown statement");
             exit(65);
@@ -2245,6 +2288,7 @@ Interpreter *createInterpreter(){
     interpreter->stmt_visitor.visitIfStmt = InterpreterVisitIfStmt;
     interpreter->stmt_visitor.visitWhileStmt = InterpreterVisitWhileStmt;
     interpreter->stmt_visitor.visitFunctionStmt = InterpreterVisitFunctionStmt;
+    interpreter->stmt_visitor.visitReturnStmt = InterpreterVisitReturnStmt;
     interpreter->globals = createEnvironment();
     interpreter->environment = interpreter->globals;
 
@@ -2313,9 +2357,14 @@ void* WhileStmtAccept(Stmt *self, StmtVisitor *stmt_visitor){
     stmt_visitor->visitWhileStmt(stmt_visitor, self);
 }
 
-void* FunctionStmtAccept(Stmt *self, StmtVisitor  *stmt_visitor){
+void* FunctionStmtAccept(Stmt *self, StmtVisitor *stmt_visitor){
     stmt_visitor->visitFunctionStmt(stmt_visitor, self);
 }
+
+void* ReturnStmtAccept(Stmt* self, StmtVisitor *stmt_visitor){
+    stmt_visitor->visitReturnStmt(stmt_visitor, self);
+}
+
 
 Print* createPrintStmt(Expr* expr){
     Print* print_stmt = (Print*)malloc(sizeof(Print));
@@ -2384,6 +2433,13 @@ Function* createFunctionStmt(Token* name, Array* params, Array* body){
     return function;
 }
 
+Return* createReturnStmt(Token* keyword, Expr* value){
+    Return* return_stmt = (Return*)malloc(sizeof(Return));
+    return_stmt->base.accept = ReturnStmtAccept;
+    return_stmt->keyword = keyword;
+    return_stmt->value = value;
+    return return_stmt;
+}
 
 
 Array* block(Parser* self){
@@ -2419,6 +2475,9 @@ Array* block(Parser* self){
         } else if (stmt->accept == FunctionStmtAccept){
             element.type = FUNCTION_STMT;
             element.data.function_stmt = (Function*)stmt;
+        } else if (stmt->accept == ReturnStmtAccept){
+            element.type = RETURN_STMT;
+            element.data.return_stmt = (Return*)stmt;
         }
         else {
             fprintf(stderr, "Error: Unknown statement");
@@ -2435,7 +2494,6 @@ void* InterpreterVisitExpressionStmt(StmtVisitor *self, Stmt* stmt){
     size_t offset = offsetof(Interpreter, stmt_visitor);
 
     Object* value = evaluate((Interpreter*)((char*)self - offset), expr_stmt->expression);
-
     return NULL;
 };
 
@@ -2504,7 +2562,24 @@ void* InterpreterVisitFunctionStmt(StmtVisitor* self, Stmt* stmt){
     LoxFunction* lox_function = createLoxFunction(function_stmt);
     Object* lox_function_object = createObject(FUN, lox_function);
     define(interpreter->environment, function_stmt->name->lexeme, lox_function_object);
+    return NULL;
 }
+
+void* InterpreterVisitReturnStmt(StmtVisitor* self, Stmt* stmt){
+    Return* return_stmt = (Return*)stmt;
+    size_t visitor_offset = offsetof(Interpreter, stmt_visitor);
+    Interpreter* interpreter = (Interpreter*)((char*)self - visitor_offset);
+
+    Object* value = NULL;
+    if (return_stmt->value != NULL) value = evaluate(interpreter, return_stmt->value);
+
+    if (value){
+        global_return_value = value;
+        longjmp(jump_buffer, 1);
+    }
+    return NULL;
+}
+
 
 Object* createObject(TokenType type,  void* value){
     Object* object = (Object*)malloc(sizeof(Object));
@@ -2710,7 +2785,7 @@ LoxFunction* createLoxFunction(Function* declaration){
 Object* functionCall(void* self, Interpreter* interpreter, Array* arguments){
     LoxFunction* lox_function = (LoxFunction*)self;
     Function* fun_decl = lox_function->declaration;
-    Environment* environment = createEnvironment();
+    Environment* environment = createEnvironmentWithEnclosing(interpreter->globals);
     for (int i = 0; i < fun_decl->params->count; i++){
         Element* param_elem = getElement(fun_decl->params, i);
         Token* param_token = param_elem->data.token;
@@ -2719,7 +2794,12 @@ Object* functionCall(void* self, Interpreter* interpreter, Array* arguments){
         Object* arg_object = arg_elem->data.object;
         define(environment, param_token->lexeme, arg_object);
     }
-    executeBlock(interpreter, fun_decl->body, environment);
+
+    if (setjmp(jump_buffer) == 0) {
+        executeBlock(interpreter, fun_decl->body, environment);
+    } else {
+        return global_return_value;
+    }
     return NULL;
 }
 
