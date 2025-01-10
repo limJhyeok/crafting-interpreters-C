@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <malloc.h>
-#include <stddef.h> // offsetof
+#include <stddef.h> // offsetof(relative memory adress in struct)
 #include <time.h>
 
 // Token
@@ -112,7 +112,6 @@ typedef struct {
     int boolean; // 1 (true) or 0 (false)
 } BoolValue;
 
-// 문자열 값 저장용 구조체
 typedef struct {
     char* string;
 } StringValue;
@@ -997,8 +996,6 @@ void* InterpreterVisitVariableExpr(Visitor* self, Expr* expr){
     size_t base_offset = offsetof(Interpreter, base);
     Interpreter* interpreter = (Interpreter*)((char*)self - base_offset);
     Environment* environment = interpreter->environment;
-    // size_t offset = offsetof(Interpreter, environment);
-    // Environment* environment = (Environment*)((char*)self + offset);    
     return environment->get(environment, ((Variable*)expr)->name);
 }
 
@@ -1009,9 +1006,6 @@ void* InterpreterVisitAssignExpr(Visitor* self, Expr* expr){
     Interpreter* interpreter = (Interpreter*)((char*)self - base_offset);
     Environment* environment = interpreter->environment;
     
-    // size_t offset = offsetof(Interpreter, environment);
-    // Environment* environment = (Environment*)((char*)self + offset);
-
     Object* value = evaluate((Interpreter*)self, expr_assign->value);
 
     environment->assign(environment, expr_assign->name, value);
@@ -1309,8 +1303,6 @@ char* stringify(Object object){
         return lox_function->toString(lox_function);
     }
     exit(70);
-    // fprintf(stderr, "Unknown type error\n");
-    // exit(EXIT_FAILURE);
 }
 
 
@@ -1571,7 +1563,7 @@ Expr* primary(Parser *self){
     }
 
     had_error = 1;
-    // self->parserError(self, peek(self), "Expect expression.");
+    self->parserError(self, peek(self), "Expect expression.");
 }
 
 Expr* unary(Parser *self){
@@ -1585,7 +1577,6 @@ Expr* unary(Parser *self){
         return (Expr *)expr_unary;
     }
     return call(self);
-    // return primary(self);
 }
 
 Expr* call(Parser* self){
@@ -1737,7 +1728,6 @@ Expr* and(Parser *self){
 
 Expr* expression(Parser* self){
     return assignment(self);
-    // return equality(self);
 }
 
 Stmt* declaration(Parser* self){
@@ -2151,8 +2141,8 @@ void *ExprCallAccept(Expr* self, Visitor *visitor){
 
 
 void report(int line, char* where, char* message){
-    // printf("[line %d] Error %s: %s\n", line, where, message);
-    // had_error = 1;
+    printf("[line %d] Error %s: %s\n", line, where, message);
+    had_error = 1;
 }
 
 void error(Token* token, char* message) {
@@ -2255,7 +2245,7 @@ Interpreter *createInterpreter(){
     LoxFunction* native_clock_fun = createNativeFunction(nativeClockArity, nativeClockFunctionCall, nativeClockToString);
     Object* native_clock_fun_object = createObject(FUN, native_clock_fun);
     define(interpreter->globals, "clock", native_clock_fun_object);
-    // interpreter->environment = createEnvironment();
+
     interpreter->evaluate = evaluate;
     interpreter->execute = execute;
     interpreter->interpret = interpret;
@@ -2399,6 +2389,9 @@ Array* block(Parser* self){
     while (!check(self, RIGHT_BRACE) && !isAtEnd(self)){
         Stmt* stmt = declaration(self);
         Element element;
+        if (had_error){
+            exit(65);
+        }
         if (stmt->accept == PrintStmtAccept){
             element.type = PRINT_STMT;
             element.data.print_stmt = (Print*)stmt;
@@ -2447,7 +2440,6 @@ void* InterpreterVisitVarStmt(StmtVisitor* self, Stmt* stmt){
     size_t env_offset = offsetof(Interpreter, environment);
     Interpreter* interpreter = (Interpreter*)((char*)self - visitor_offset); 
     Environment* environment = interpreter->environment;
-    // Environment* environment = (Environment*)((char*)interpreter + env_offset);
     if (init){
         value = evaluate(interpreter, init);
     }
@@ -2574,7 +2566,7 @@ void insert(Entry* hashTable[], char* key, Object* value) {
 
     while (entry != NULL) {
         if (strcmp(entry->key, key) == 0) {
-            entry->value = value; // 키가 이미 존재하면 값 업데이트
+            entry->value = value;
             return;
         }
         entry = entry->next;
@@ -2595,7 +2587,7 @@ Object* find(Entry* hashTable[], char* key) {
 
     while (entry != NULL) {
         if (strcmp(entry->key, key) == 0) {
-            return entry->value; // 값 반환
+            return entry->value;
         }
         entry = entry->next;
     }
@@ -2659,7 +2651,6 @@ Object* get(Environment* self, Token* name){
         if (object) return object;
         self = self->enclosing;
     }
-    // if (self->enclosing != NULL) return find(self->enclosing->values, name->lexeme);
 
     runtime_error_flag = 1;
     char buffer[MAX_TOKEN_LEXEME_SIZE + 30] = "Undefined variable '"; 
@@ -2731,7 +2722,7 @@ int arity(LoxCallable* self){
 }
 
 char* toString(LoxFunction* self) {
-    char* buffer = (char*)malloc(MAX_TOKEN_LEXEME_SIZE + 20);  // 충분한 크기로 할당
+    char* buffer = (char*)malloc(MAX_TOKEN_LEXEME_SIZE + 20); 
     if (buffer == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
         exit(EXIT_FAILURE);
@@ -2739,7 +2730,7 @@ char* toString(LoxFunction* self) {
 
     snprintf(buffer, MAX_TOKEN_LEXEME_SIZE + 20, "<fn %s>", self->declaration->name->lexeme);
 
-    return buffer;  // 할당된 메모리 주소를 반환
+    return buffer;
 }
 
 
